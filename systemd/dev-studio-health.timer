@@ -1,0 +1,17 @@
+[Unit]
+Description=Run Dev Studio health probe every 30 minutes
+Requires=dev-studio-health.service
+
+[Timer]
+# 5 dk sonra ilk çalışma, sonra her 30 dk'da bir
+OnBootSec=5min
+OnUnitActiveSec=30min
+# Sistem kapalıysa, açıldığında kaçırılan çalışmayı yap
+Persistent=true
+# Üst üste binmeyi önle
+RandomizedDelaySec=30s
+AccuracySec=1min
+Unit=dev-studio-health.service
+
+[Install]
+WantedBy=timers.target
