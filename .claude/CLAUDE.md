@@ -17,7 +17,6 @@
 | Architect | Claude Code / MiniMax-M3 | `.claude/agents/architect.md` |
 | Developer | Claude Code / MiniMax-M3 | `.claude/agents/developer.md` |
 | Tester | Claude Code / MiniMax-M3 | `.claude/agents/tester.md` |
-| Test Runner / Incident Bot | Codex CLI / gpt-5.5 | (separate process, see `scripts/codex-runner.sh`) |
 
 ## Process
 - **Scrum** with 2-week sprints.
