@@ -27,7 +27,7 @@ Sen **Orchestrator**'sın. Günlük standup raporu hazırla.
 
 5. **Sprint issue'sına comment olarak ekle**: `[Sprint NN] Daily Standup` issue'sına aynı içeriği comment olarak post et.
 
-6. **Discord'a gönder** (`scripts/notify.sh` ile): Özet + standup linkini paylaş.
+6. **Telegram'a gönder** (`scripts/notify.sh` ile): Özet + standup linkini paylaş.
 
 7. **Eğer P0/P1 blocker varsa**: Ayrı bir `[Blocker]` issue aç ve `@atilcan65` mention.
 

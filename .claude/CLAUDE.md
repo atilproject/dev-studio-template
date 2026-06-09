@@ -44,7 +44,7 @@ A story is "Done" only if ALL of these hold:
 - **Issues**: use templates in `.github/ISSUE_TEMPLATE/`.
 - **PR comments**: structured (see developer.md and tester.md).
 - **Cross-agent**: never DM-style. Always via GitHub Issue or PR comment.
-- **Escalation to human**: Discord webhook + GitHub `@`-mention to @atilcan65.
+- **Escalation to human**: Telegram bot + GitHub `@`-mention to @atilcan65.
 
 ## Things agents must NEVER do
 - Push directly to `main`.

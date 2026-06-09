@@ -51,3 +51,9 @@ coverage/
 # Local data
 *.sqlite
 *.db
+
+# Local environment files (contain secrets)
+.dev-studio-env
+.env
+.env.local
+*.token
