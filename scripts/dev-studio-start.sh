@@ -104,15 +104,18 @@ echo "Claude Code otomatik başlatılıyor (--dangerously-skip-permissions)"
 echo "Soul: .claude/agents/${role}.md zaten diskte, bellekte yüklenecek"
 echo "Self-driving loop aktif: 60s'de bir GitHub poll, event çıkarsa pane uyanır."
 echo ""
-KICKOFF_FILE="$REPO_ROOT/scripts/kickoff/${role}.txt"
-if [ -f "$KICKOFF_FILE" ]; then
-  KICKOFF_PROMPT="$(cat "$KICKOFF_FILE")"
-else
-  KICKOFF_PROMPT="Read .claude/agents/${role}.md and CLAUDE.md. Check /var/log/dev-studio/agent-state/${role}.json. Act on events or wait."
-fi
-claude --dangerously-skip-permissions --agent "${role}" "$KICKOFF_PROMPT"
 
 # Claude exit edince trap cleanup'ı çalıştırır. Sonra fallback bash.
+
+KICKOFF_FILE="$REPO_ROOT/scripts/kickoff/${role}.txt"
+if [ -f "\$KICKOFF_FILE" ]; then
+  KICKOFF_PROMPT="\$(cat "\$KICKOFF_FILE")"
+else
+  KICKOFF_PROMPT="Read .claude/agents/${role}.md and CLAUDE.md. Check /var/log/dev-studio/agent-state/${role}.json for pending events. Act on events or wait for next watcher poll."
+fi
+
+claude --dangerously-skip-permissions --agent "${role}" --append-system-prompt-file "$REPO_ROOT/.claude/agents/${role}.md" "\$KICKOFF_PROMPT"
+
 exec bash
 EOF
   chmod +x "$file"
