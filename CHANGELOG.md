@@ -17,6 +17,15 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   [`docs/designs/STORY-001-design.md`](docs/designs/STORY-001-design.md),
   and [`docs/decisions/ADR-0001-fastapi-skeleton.md`](docs/decisions/ADR-0001-fastapi-skeleton.md).
 
+- **STORY-004 — `GET /hello/{name}` greeting endpoint** (Sprint 1, P1).
+  Demo-facing route that returns `200 OK` with
+  `{"message": "hello, {name}"}` and `Content-Type: application/json`.
+  Case is preserved verbatim (no lowercasing); URL-encoded values pass
+  through unchanged (e.g. `/hello/%20` → `"hello,  "`). The path segment
+  is required, capped at 64 characters to bound log-spam risk; missing
+  name returns `404` (FastAPI default), not `500`.
+  See [`docs/backlog/sprint-1/STORY-004-hello-name-greeting-endpoint.md`](docs/backlog/sprint-1/STORY-004-hello-name-greeting-endpoint.md).
+
 ### Infrastructure
 
 - `pyproject.toml` — PEP 621, Python `>=3.12,<3.13`, pinned runtime deps
@@ -30,5 +39,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - `tests/test_healthz.py` — single skeleton smoke test (AC2 happy path).
   Full contract test suite (404, determinism, subprocess lifecycle,
   README on-ramp timing) lands in STORY-002.
+- `tests/test_hello.py` — 4 contract tests for `/hello/{name}` (AC1–AC4
+  of STORY-004). Happy-path + case-preservation pair satisfies AC5.
 - `README.md` — Sprint 1 repo layout + 4-step "Getting started" (Install
   uv → `make install` → `make run` → `curl /healthz`).

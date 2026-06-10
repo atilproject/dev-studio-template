@@ -67,6 +67,12 @@ curl -i http://127.0.0.1:8000/healthz
 #   HTTP/1.1 200 OK
 #   content-type: application/json
 #   {"status":"ok"}
+
+# 4. try the demo greeting endpoint (STORY-004)
+curl -i http://127.0.0.1:8000/hello/world
+#   HTTP/1.1 200 OK
+#   content-type: application/json
+#   {"message":"hello, world"}
 ```
 
 ### Run the tests
