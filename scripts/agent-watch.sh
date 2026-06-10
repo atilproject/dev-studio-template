@@ -9,6 +9,12 @@
 #   agent-watch.sh <role> --loop    # poll forever (sleeps poll_interval between checks)
 #   agent-watch.sh <role> --once    # alias for one-shot (default)
 #
+# Env:
+#   WAKE_PANE=1   — when new_events > 0, send a wake-up prompt to the role's
+#                   tmux pane via `tmux send-keys`. Auto-enabled in --loop mode.
+#                   Override with WAKE_PANE=0 to disable.
+#   TMUX_SESSION  — session name to address (default: dev-studio)
+#
 # Output (JSON, to stdout):
 #   {
 #     "role": "<role>",
@@ -40,6 +46,11 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_HELPER="$SCRIPT_DIR/agent-state.sh"
 ROLE="${1:-}"
 MODE="${2:---once}"
+TMUX_SESSION="${TMUX_SESSION:-dev-studio}"
+# WAKE_PANE: 0/1. Auto-enabled in --loop mode unless explicitly set to 0.
+WAKE_PANE_DEFAULT=0
+[ "$MODE" = "--loop" ] && WAKE_PANE_DEFAULT=1
+WAKE_PANE="${WAKE_PANE:-$WAKE_PANE_DEFAULT}"
 
 if [ -z "$ROLE" ]; then
   echo "Usage: $0 <role> [--once|--loop]" >&2
@@ -181,6 +192,55 @@ query_board_changes() {
            } ]"
 }
 
+# --- tmux pane wake-up (title-based) ---
+# Find pane by title (role uppercase) and inject a wake-up prompt via send-keys.
+# Safe to call when not inside tmux — silently no-ops.
+wake_pane_for_role() {
+  local role="$1"
+  local events_json="$2"
+  local count
+  count="$(echo "$events_json" | jq 'length')"
+  [ "$count" -gt 0 ] || return 0
+
+  # tmux available?
+  command -v tmux >/dev/null 2>&1 || return 0
+  tmux has-session -t "$TMUX_SESSION" 2>/dev/null || return 0
+
+  # Find pane id by title (uppercase role). Fallback: deterministic index map.
+  local role_upper
+  role_upper="$(echo "$role" | tr '[:lower:]' '[:upper:]')"
+
+  local pane_id
+  pane_id="$(tmux list-panes -t "$TMUX_SESSION" -F '#{pane_id} #{pane_title}' 2>/dev/null \
+    | awk -v t="$role_upper" '$2 == t { print $1; exit }')"
+
+  # Fallback index map (matches dev-studio-start.sh layout)
+  if [ -z "$pane_id" ]; then
+    case "$role" in
+      orchestrator)    pane_id="${TMUX_SESSION}:main.0" ;;
+      product-manager) pane_id="${TMUX_SESSION}:main.1" ;;
+      architect)       pane_id="${TMUX_SESSION}:main.2" ;;
+      developer)       pane_id="${TMUX_SESSION}:main.3" ;;
+      tester)          pane_id="${TMUX_SESSION}:main.4" ;;
+      *) return 0 ;;
+    esac
+  fi
+
+  # Compose pretty-printed wake-up prompt (heredoc-safe).
+  local pretty
+  pretty="$(echo "$events_json" | jq '.')"
+
+  local prompt
+  prompt="🔔 INBOX (auto-wake from agent-watch loop):
+${pretty}
+
+Lütfen pickup et: review yap, label flip et, peer'i bilgilendir, sonra standby."
+
+  # Send prompt then Enter. Use literal mode (-l) so backticks/quotes survive.
+  tmux send-keys -t "$pane_id" -l "$prompt" 2>/dev/null || return 0
+  tmux send-keys -t "$pane_id" Enter 2>/dev/null || true
+}
+
 # --- the actual poll ---
 poll_once() {
   local now
@@ -226,6 +286,11 @@ poll_once() {
   echo "$new_events" | jq -r '.[].id' | while read -r eid; do
     [ -n "$eid" ] && "$STATE_HELPER" mark "$ROLE" "$eid"
   done
+
+  # Wake the tmux pane if events arrived and wake mode is on.
+  if [ "$WAKE_PANE" = "1" ]; then
+    wake_pane_for_role "$ROLE" "$new_events" || true
+  fi
 }
 
 case "$MODE" in

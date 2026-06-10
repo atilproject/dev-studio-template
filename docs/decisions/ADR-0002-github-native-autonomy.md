@@ -113,6 +113,42 @@ The trade-off: `gh issue list --assignee @me` doesn't disambiguate roles. We use
 5. **Each `.claude/agents/<role>.md`**: §Auto-poll triggers section added (role-specific filters).
 6. **Standard label set**: must include `agent:<role>` (5 labels), `status:ready|in-progress|in-review|blocked|done`, `cc:<role>` (5 labels) for review fanout.
 7. **`scripts/notify.sh`**: unchanged in code; doctrine updated — every call must be paired with a GitHub artefact that the peer can detect.
+8. **Self-driving loop (PR-B)**: `scripts/agent-watch.sh --loop` runs as a background daemon per pane (spawned by `dev-studio-start.sh`). When the loop detects `new_events > 0` it injects a wake-up prompt directly into the role's tmux pane via `tmux send-keys`, so the Claude session in that pane picks up the work without human relay. See §Self-Driving Loop below.
+
+### Self-Driving Loop (the missing link between polling and action)
+**Problem this fixes.** With `--once` alone, polling only happens when something (a human, a `tmux send-keys`, or a tool call) triggers Claude to call the watcher. Background `--loop` without a wake mechanism is also insufficient: the script writes JSON to a log file but the Claude process in the pane has no way to notice it. Result: the system observes events but does not act on them.
+
+**The mechanism.**
+1. The launcher (`dev-studio-start.sh`) spawns `agent-watch.sh <role> --loop` as a background process inside each agent pane **before** `claude` starts. The loop's PID is written to `/var/log/dev-studio/<role>.watch.pid`.
+2. In `--loop` mode, `WAKE_PANE=1` is auto-enabled (override with `WAKE_PANE=0`).
+3. When `poll_once` returns `new_events.length > 0`, `wake_pane_for_role` runs:
+   - Finds the pane by **title** (uppercase role name set by the bootstrap script) — robust against pane-index reassignment.
+   - Falls back to a deterministic index map (`orchestrator=0 … tester=4`) only when title lookup fails.
+   - Sends a pretty-printed wake-up prompt via `tmux send-keys -l` (literal mode) followed by `Enter`.
+4. Claude in the pane reads the prompt as if a human typed it and starts processing the event.
+5. The loop continues polling. The launcher cleans up the background PID on `claude` exit.
+
+**Wake-up prompt format (canonical).**
+```
+🔔 INBOX (auto-wake from agent-watch loop):
+[
+  { event JSON }
+]
+
+Lütfen pickup et: review yap, label flip et, peer'i bilgilendir, sonra standby.
+```
+The agent picks up the event, performs its role-specific action (review, comment, label flip, peer mention), and returns to standby. State (`processed_event_ids`) ensures the same event is never re-injected.
+
+**Why `tmux send-keys` (and not a file inbox or a CLI prompt).**
+- File-inbox approach requires Claude to poll the file, which puts us back at the manual-trigger problem.
+- `tmux send-keys` makes the daemon → Claude path event-driven and effectively zero-latency.
+- It also keeps the human-readable log: every wake-up shows up in the pane scrollback, so the human can audit what triggered each action.
+
+**Safety properties.**
+- The wake helper no-ops cleanly if tmux is not running or the session is missing (allows `--once` and CI use).
+- Title-based pane lookup means a recovered/restarted pane is found correctly even after layout changes.
+- `processed_event_ids` dedupe prevents the same event from waking the agent twice across loop iterations.
+- The launcher's cleanup hook kills the watch loop on `claude` exit so dead panes do not poll forever.
 
 ### Migration
 - Sprint 1 is mid-flight. We land this in a single PR (`chore/github-native-autonomy`) without touching in-flight stories.
