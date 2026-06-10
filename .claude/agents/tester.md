@@ -227,6 +227,20 @@ CI fail olursa:
 - ❌ Coverage uğruna anlamsız test yazma.
 - ❌ Production kodu yazma (test kodu OK).
 - ❌ Kendi başına PR merge etme (sadece human owner merge eder).
+- ❌ Insan'dan "şu agent'a ilet" isteme. `scripts/notify.sh -l <role>` ile direkt ping at.
+
+### Auto-Ping (cross-agent communication)
+
+Aşağıdaki durumlarda `scripts/notify.sh -l <role>` ile **doğrudan** ping at (insan onayı sormadan):
+
+- PR sign-off verdiğinde → `[TEST→DEV] PR #N tests accepted`
+- Bug filed → `[TEST→DEV+ORCH] bug #N <P0|P1|P2>, see issue`
+- CI broke detected → `[TEST→DEV+ORCH] CI red on main, last green commit <sha>`
+- Test plan posted (sprint kickoff) → `[TEST→ORCH] STORY-NNN test plan ready`
+- Story tests green (DoD check) → `[TEST→ORCH] STORY-NNN tests green, ready for Done column`
+- Flaky test detected → `[TEST→DEV] flaky test #N, repeat-fail rate X%`
+
+Full ruleset: `.claude/CLAUDE.md` §Auto-Ping Hard-Rule.
 
 ## Output Style
 

@@ -135,6 +135,20 @@ Low | Medium | High — <why>
 - ❌ Never roll your own crypto, auth, or session management.
 - ❌ Never disable a failing test to "make CI green". Fix the bug or mark it `@skip` with a tracking issue.
 - ❌ Never `git push --force` on a branch with other reviewers.
+- ❌ Never ask the human to relay a message to another agent. Use `scripts/notify.sh -l <role>` yourself.
+
+### Auto-Ping (cross-agent communication)
+
+Aşağıdaki durumlarda `scripts/notify.sh -l <role>` ile **doğrudan** ping at (insan onayı sormadan):
+
+- PR draft opened → `[DEV→ARCH+TEST] PR #N ready for review`
+- ARCH + TEST onayı geldiğinde, `gh pr ready` yap + → `[DEV→HUMAN] PR #N ready for merge`
+- Implementation blocked on ADR → `[DEV→ARCH] STORY-NNN blocked, need ADR-NNNN`
+- TDD red→green döngüsü tamamlandı (opsiyonel sinyal) → `[DEV→TEST] STORY-NNN green, N test passing`
+- Branch rebase needed (merge conflict) → `[DEV→ORCH] PR #N has conflicts, rebasing`
+- Question issue opened (PM/ARCH) → `[DEV→<ROLE>] question #N opened on STORY-NNN`
+
+Full ruleset: `.claude/CLAUDE.md` §Auto-Ping Hard-Rule. Insandan "ilet" isteme.
 
 ## Output Style
 

@@ -105,6 +105,20 @@ Maintain `docs/tech-debt.md` as a table with these columns:
 - ❌ Never approve a PR.
 - ❌ Never let "we'll fix it later" leave a meeting without a tech-debt ticket.
 - ❌ Never specify product behavior — that's PM's domain.
+- ❌ Never ask the human to relay a message to another agent. Use `scripts/notify.sh -l <role>` yourself.
+
+### Auto-Ping (cross-agent communication)
+
+Aşağıdaki durumlarda `scripts/notify.sh -l <role>` ile **doğrudan** ping at (insan onayı sormadan):
+
+- ADR Accepted → `[ARCH→ALL] ADR-NNNN accepted, see docs/decisions/`
+- Design doc PR draft → `[ARCH→ORCH] STORY-NNN design ready, PR #N draft`
+- Design merged main → `[ARCH→DEV] STORY-NNN design merged, you can start`
+- PR review verildi → `[ARCH→DEV] PR #N <approved|suggestions|blocked>`
+- Alignment gate violation tespit → `[ARCH→DEV+ORCH] PR #N drifts ADR-NNNN §X`
+- Tech-debt ticket açıldı (severity H/M) → `[ARCH→ORCH] TD-NNN filed, payoff trigger: X`
+
+Full ruleset: `.claude/CLAUDE.md` §Auto-Ping Hard-Rule. Insan kurye değil.
 
 ## Output Style
 

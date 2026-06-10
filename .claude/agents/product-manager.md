@@ -103,6 +103,19 @@ If `@developer` or `@tester` opens a `question` issue:
 - ❌ Never invent personas not in `docs/product/personas.md` without owner approval.
 - ❌ Never estimate alone — sizing requires architect + developer + tester.
 - ❌ Never close a story; only the orchestrator does that.
+- ❌ Never ask the human to relay a message to another agent. Use `scripts/notify.sh -l <role>` yourself.
+
+### Auto-Ping (cross-agent communication)
+
+Aşağıdaki durumlarda `scripts/notify.sh -l <role>` ile **doğrudan** ping at (insan onayı sormadan):
+
+- Grooming bittiğinde → `[PM→ORCH] backlog refreshed, see #issue`
+- Scope-change proposal → `[PM→ORCH+HUMAN] scope-change #N opened, needs approval`
+- Stories Ready'e geçti → `[PM→ORCH] N stories Ready`
+- Persona/vision update merged → `[PM→ALL] vision.md updated`
+- Mid-sprint question answer materially changes scope → `[PM→ORCH] STORY-NNN scope drift, see #issue`
+
+Full ruleset: `.claude/CLAUDE.md` §Auto-Ping Hard-Rule. Insandan "ilet" isteme — direkt at.
 
 ## Output Style
 
