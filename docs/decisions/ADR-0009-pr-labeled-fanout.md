@@ -285,6 +285,205 @@ reference **both** ADR-0008 and ADR-0009 as the canonical pattern.
 
 ---
 
+## 10. Agent-side adoption contract (BUG-3 closure)
+
+**Added 2026-06-11 after BUG-3 / issue #56.**
+
+### 10.1 The gap
+
+ADR-0009 introduced `needs-tester-signoff` (and re-emphasised
+`needs-architect-review`) as `pr_labeled` wake labels in § 2.1. The
+**producer** (the watcher's `query_pr_labeled`) landed in PR #49. The
+**consumer** (the agent prompts + `.claude/CLAUDE.md` Label semantik
+sözlüğü) was **not updated atomically**. As a result, agents following
+the pre-D2.2 playbook would clean up the wake labels along with the
+`cc:*` labels they already knew about, breaking the D2.2 wake pipeline
+in production (tester never wakes when architect pre-emptively removes
+`needs-tester-signoff`).
+
+### 10.2 The contract
+
+Every protocol change that introduces a new wake label — whether
+`pr_labeled` (this ADR), `pr_merged` (ADR-0008), or future event types
+— must update the **consumer side atomically** with the producer side.
+Specifically:
+
+| File | Must reference | Why |
+|------|----------------|-----|
+| `.claude/CLAUDE.md` | All wake labels for all roles | The Label semantik sözlüğü is the canonical registry |
+| `.claude/agents/{role}.md` | The role's own wake labels + anti-pattern "do not remove other roles' wake labels" | The soul file is what an agent reads on session start |
+| `scripts/kickoff/{role}.txt` | The role's own wake labels | The bootstrap prompt for new Claude Code sessions |
+
+For D2.2 (ADR-0009), the mandatory wake-label references are:
+
+| Role | Wake labels to reference in their prompt/contract |
+|------|--------------------------------------------------|
+| `architect` | `needs-architect-review`, `cc:architect`, `agent:architect` |
+| `tester`    | `needs-tester-signoff`, `cc:tester`, `agent:tester` |
+| `developer` | `needs-tester-signoff` (add when PR ready for test) + all others (as anti-pattern: do not remove) |
+| `pm`        | All wake labels (for board hygiene / routing decisions) |
+| `orchestrator` | All wake labels (for routing logic) |
+
+### 10.3 Required anti-pattern: "do not remove other roles' wake labels"
+
+Every agent's Handoff Discipline table must include an explicit
+**anti-pattern** row:
+
+> ❌ Other roles' wake label'lerini kaldırmak (`needs-architect-review`,
+> `needs-tester-signoff`, `cc:*`, `agent:*`). Bu label'lar o rolün
+> `pr_labeled` wake'i. Sen kaldırırsan, o rol uyanmaz. ADR-0009 § 2.1
+> + § 10.
+
+The original pre-D2.2 anti-pattern was just "don't leave the queue in
+limbo" — it didn't distinguish between "your queue" and "another
+role's queue." D2.2 added a new category of label (wake labels for
+other roles) that must be treated as off-limits to anyone but the
+tester/architect signing off on their own work.
+
+### 10.4 Producer-consumer atomicity (template lesson)
+
+This bug class will recur every time a new wake label is introduced
+into the watcher. The right long-term answer is **producer-consumer
+atomicity at the PR level**: a protocol-change PR is not complete
+until both the producer (watcher event) and the consumer (agent
+prompts + handoff contract) land. The PR's acceptance criteria should
+explicitly list both sides. Concretely:
+
+1. **PR body checklist** — add "agent prompt updated" + "CLAUDE.md
+   label dictionary updated" as explicit AC items, not afterthoughts.
+2. **Pre-merge test** — run a smoke that verifies the wake label
+   actually wakes the right role on a test PR, end-to-end. If the
+   label is missing from the prompt, the role won't know to keep it
+   on the PR, and the wake will be lost.
+3. **PR template** — `.github/PULL_REQUEST_TEMPLATE.md` (or equivalent)
+   should include a "Protocol change? Update producer + consumer
+   atomically" reminder.
+
+This is a **template-grade lesson** and will be captured more fully
+in a future ADR-0010 (proposed scope: "Multi-agent protocol change
+discipline — producer-consumer atomicity").
+
+### 10.5 Specific file changes required to close BUG-3
+
+(To be applied by the respective file owners per the project File
+ownership matrix; architect provides the **exact text** to drop in.)
+
+#### 10.5.1 `.claude/CLAUDE.md` (owner: human) — Label semantik sözlüğü
+
+Insert a new row in the table (around line 204):
+
+```
+| `needs-tester-signoff` | Tester sign-off bekliyor (`pr_labeled` wake — D2.2) | developer (PR ready iken) veya architect (review sonrası, label kalır) | tester (APPROVED verdict ile birlikte) |
+```
+
+#### 10.5.2 `.claude/agents/architect.md` (owner: human) — Handoff Discipline
+
+Line 153 — change the 🟢 OK row to use `needs-tester-signoff` as the
+forward signal instead of `cc:tester`:
+
+```
+| `needs-architect-review` label'lı PR'a review yazdın (🟢 OK) | `--remove-label needs-architect-review --remove-label cc:architect` (do NOT remove `needs-tester-signoff`) | `[ARCH→TEST] PR #N design OK, tests gözden geçirebilirsin` |
+```
+
+Add an anti-pattern row (after the existing `❌ Design review yazıp
+cc:architect veya needs-architect-review etiketini bırakmak` row at
+line 167):
+
+```
+| ❌ `needs-tester-signoff` veya `cc:tester` label'larını kaldırmak (architect olarak) — bunlar tester'ın `pr_labeled` wake'i; sen kaldırırsan tester uyanmaz. ADR-0009 § 2.1, § 10.3 |
+```
+
+#### 10.5.3 `.claude/agents/tester.md` (owner: human) — Handoff Discipline
+
+Add a new "Wake labels I respond to" section:
+
+```
+## Wake labels I respond to (D2.2)
+
+- `needs-tester-signoff` — explicit sign-off ask, fires `pr_labeled` event
+- `cc:tester` — active queue pointer
+- `agent:tester` — story ownership signal
+
+When ANY of these labels is added to a PR where I'm `agent:tester` (or
+no `agent:*` is set), the watcher emits a `pr_labeled` event for me.
+
+On 🟢 APPROVED: `--remove-label needs-tester-signoff --add-label status:ready`
+On 🔴 CHANGES REQUESTED: `--remove-label needs-tester-signoff --add-label cc:developer`
+On 🟡 NEEDS DISCUSSION: `--remove-label needs-tester-signoff --add-label cc:architect`
+```
+
+#### 10.5.4 `.claude/agents/developer.md` (owner: human) — queue activation
+
+Add to the developer's queue-activation rules:
+
+```
+When opening a PR ready for tester review:
+- Add `needs-tester-signoff` (D2.2 wake label — wake path is `pr_labeled`)
+- Optionally also add `cc:tester` (legacy wake path; redundant but explicit)
+```
+
+#### 10.5.5 `scripts/kickoff/{role}.txt` (owner: each agent / dev) — bootstrap
+
+Each kickoff file should reference the role's wake labels in the
+"OPERATING MODE" section. For architect.txt (which the architect
+amends themselves):
+
+```
+- Your watcher polls GitHub every 60s for: PRs labeled "cc:architect",
+  "needs-architect-review", OR "agent:architect" (any of these wakes
+  you via pr_labeled or pr_review_requested). See ADR-0009 § 2.1 for
+  the full wake set. Do NOT remove `needs-tester-signoff` from PRs —
+  that's tester's wake, not yours.
+```
+
+For tester.txt, developer.txt, pm.txt, orchestrator.txt — analogous
+additions per the role's own wake set.
+
+#### 10.5.6 Smoke test S5-Handoff (owner: developer) — verify the loop
+
+Add a smoke test in `scripts/tests/` that exercises the full D2.2 path:
+
+1. Open a sandbox PR with `needs-tester-signoff`.
+2. Verify watcher's `query_pr_labeled` emits an event for the tester
+   role with `wake_reason: "label:needs-tester-signoff"`.
+3. Verify the tester pane wakes within 60s.
+4. Verify the tester's first action includes `--remove-label
+   needs-tester-signoff --add-label status:ready` (the test handoff).
+5. Negative: if a different role (e.g. architect) removes
+   `needs-tester-signoff` before the tester acts, the test SHOULD
+   fail with "tester never woke" — this is the BUG-3 reproduction.
+
+### 10.6 File ownership and apply path
+
+| Change | Owner | Apply path |
+|--------|-------|-----------|
+| § 10.5.1 (CLAUDE.md label dictionary) | **human** | direct edit (file is human-only) |
+| § 10.5.2 (architect.md Handoff Discipline) | **human** | direct edit (file is human-only) |
+| § 10.5.3 (tester.md Wake labels section) | **human** | direct edit |
+| § 10.5.4 (developer.md queue rules) | **human** | direct edit |
+| § 10.5.5 (kickoff files) | **each agent / developer** | per agent's own PR (low priority — affects new sessions only) |
+| § 10.5.6 (S5-Handoff smoke test) | **developer** | new PR |
+| **This ADR § 10** | **architect** | this PR (already drafted) |
+
+The split reflects the file ownership matrix: `.claude/` is
+human-only and must be applied by the human; `scripts/kickoff/` and
+test files can be applied by the respective agents or developer.
+
+### 10.7 Cross-references
+
+- **Issue #56** (this bug) — BUG-3
+- **PR #49** — D2.2 producer-side landed (this is the producer; § 10
+  is the consumer update)
+- **PRs #51, #54, #55** — D2.2 follow-ups; all 3 affected by BUG-3
+  in production today
+- **ADR-0008 § 7** — pre-existing template doctrine; § 10 extends it
+  with producer-consumer atomicity
+- **Future ADR-0010** (proposed) — cross-cutting "protocol change
+  discipline" ADR; will reference this section as the D2.2 case
+  study
+
+---
+
 ## 8. Out of scope (deferred)
 
 - **D2.3** — Doctor `--at TIMESTAMP` time-travel mode. Issue #47 explicitly
