@@ -109,55 +109,69 @@ require_gh
 # Ensure state file exists
 "$STATE_HELPER" init "$ROLE" >/dev/null
 
-LAST_SEEN="$("$STATE_HELPER" get "$ROLE" last_seen_utc)"
 POLL_INTERVAL="$("$STATE_HELPER" get "$ROLE" poll_interval_sec)"
 POLL_INTERVAL="${POLL_INTERVAL:-60}"
 
-# v3: pr_merged_last_seen_utc — separate high-water mark for merged-PR polling.
-# Decoupled from last_seen_utc (which is event-mark-driven) to avoid race when
-# poll interval and merge interval overlap. Backfilled to (now - WINDOW) on first
-# read so we don't spam-replay every historical merge on a fresh state file.
+# v3.4 (issue #61 fix): HWM refresh on every poll.
 #
-# Backfill window is configurable via PR_MERGED_BACKFILL env var (GNU date expr).
-# Default = '1 hour ago': long enough that a watcher restart taking even tens of
-# minutes (e.g. operator paste latency, brief outage) won't drop a freshly-merged
-# PR, while still bounded so a multi-day-old state file doesn't replay history.
-# Re-merge of the same PR is harmless: event ID embeds the merge SHA and the
-# processed_event_ids ring buffer dedupes anything already delivered.
+# Bug (issue #61): `LAST_SEEN` / `PR_MERGED_LAST_SEEN` / `PR_LABELED_LAST_SEEN`
+# were previously read ONCE at script start (this file, pre-fix) and never
+# refreshed inside `poll_once`. In a long-running --loop watcher, the local
+# HWM vars drifted behind the state file's HWM (which advances on every
+# poll's tail), so the gh query kept returning historical events with old
+# `updatedAt`. Combined with the FIFO trim on `processed_event_ids`, the
+# dedup chain failed and events re-emitted indefinitely (board-50/52
+# phantoms in the orchestrator's INBOX — 17+/8+ re-emissions per session).
+#
+# Fix: read all 3 HWMs from state at the start of every poll_once call (see
+# `poll_once` below). The backfill logic stays — it runs on first call
+# (state empty) and is a no-op thereafter. The two `init_*_hwm` functions
+# are called from poll_once, NOT script-top, so the local vars are always
+# fresh relative to the state file.
+#
+# Backfill window defaults are unchanged from v3/v3.2:
+#   PR_MERGED_BACKFILL = '1 hour ago'   — long enough to span a brief
+#                                         watcher restart, short enough
+#                                         to not replay multi-day history.
+#   PR_LABELED_BACKFILL = '60 seconds ago' — D2.2 § 2.3 / § 6: matches
+#                                            default poll interval so we
+#                                            don't miss a wake during a
+#                                            brief restart.
 PR_MERGED_BACKFILL="${PR_MERGED_BACKFILL:-1 hour ago}"
-PR_MERGED_LAST_SEEN="$("$STATE_HELPER" get "$ROLE" pr_merged_last_seen_utc)"
-if [ -z "$PR_MERGED_LAST_SEEN" ] || [ "$PR_MERGED_LAST_SEEN" = "null" ]; then
-  # GNU date (Linux) understands "-d '1 hour ago'"; BSD date (macOS) needs -v.
-  # For BSD fallback we parse a leading integer + unit out of PR_MERGED_BACKFILL.
-  PR_MERGED_LAST_SEEN="$(date -u -d "$PR_MERGED_BACKFILL" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
-  if [ -z "$PR_MERGED_LAST_SEEN" ]; then
-    # BSD fallback: extract "<N> <unit>" → -v-<N><U>; default to -1H if unparsable.
-    bsd_num="$(printf '%s' "$PR_MERGED_BACKFILL" | awk '{print $1}')"
-    bsd_unit="$(printf '%s' "$PR_MERGED_BACKFILL" | awk '{print $2}' | cut -c1 | tr '[:lower:]' '[:upper:]')"
-    case "$bsd_unit" in M|H|D|W) : ;; *) bsd_num=1; bsd_unit=H ;; esac
-    PR_MERGED_LAST_SEEN="$(date -u -v-"${bsd_num}${bsd_unit}" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
-      || date -u '+%Y-%m-%dT%H:%M:%SZ')"
-  fi
-  "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$PR_MERGED_LAST_SEEN"
-fi
-
-# v3.2 (ADR-0009): pr_labeled_last_seen_utc — HWM cursor for PR-open architect
-# /tester routing. Per ADR-0009 § 2.3, HWM is the PR's updatedAt (proxy for
-# "any change since last poll"), backfilled to (now - 60s) on first run to
-# prevent mass-wake at rollout (every open PR with a wake-trigger label would
-# otherwise flood the panes). 60s == default poll window so we won't miss a
-# wake that happened during a brief watcher restart.
 PR_LABELED_BACKFILL="${PR_LABELED_BACKFILL:-60 seconds ago}"
-PR_LABELED_LAST_SEEN="$("$STATE_HELPER" get "$ROLE" pr_labeled_last_seen_utc)"
-if [ -z "$PR_LABELED_LAST_SEEN" ] || [ "$PR_LABELED_LAST_SEEN" = "null" ]; then
-  PR_LABELED_LAST_SEEN="$(date -u -d "$PR_LABELED_BACKFILL" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
-  if [ -z "$PR_LABELED_LAST_SEEN" ]; then
-    # BSD fallback: parse "<N> <unit>" or just default to 60s ago.
-    PR_LABELED_LAST_SEEN="$(date -u -v-60S '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
-      || date -u '+%Y-%m-%dT%H:%M:%SZ')"
+
+# init_pr_merged_hwm — read PR_MERGED_LAST_SEEN with first-run backfill.
+# Idempotent. Sets the global var; called from poll_once.
+init_pr_merged_hwm() {
+  PR_MERGED_LAST_SEEN="$("$STATE_HELPER" get "$ROLE" pr_merged_last_seen_utc)"
+  if [ -z "$PR_MERGED_LAST_SEEN" ] || [ "$PR_MERGED_LAST_SEEN" = "null" ]; then
+    # GNU date (Linux) understands "-d '1 hour ago'"; BSD date (macOS) needs -v.
+    PR_MERGED_LAST_SEEN="$(date -u -d "$PR_MERGED_BACKFILL" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
+    if [ -z "$PR_MERGED_LAST_SEEN" ]; then
+      # BSD fallback: extract "<N> <unit>" → -v-<N><U>; default to -1H if unparsable.
+      bsd_num="$(printf '%s' "$PR_MERGED_BACKFILL" | awk '{print $1}')"
+      bsd_unit="$(printf '%s' "$PR_MERGED_BACKFILL" | awk '{print $2}' | cut -c1 | tr '[:lower:]' '[:upper:]')"
+      case "$bsd_unit" in M|H|D|W) : ;; *) bsd_num=1; bsd_unit=H ;; esac
+      PR_MERGED_LAST_SEEN="$(date -u -v-"${bsd_num}${bsd_unit}" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+        || date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    fi
+    "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$PR_MERGED_LAST_SEEN"
   fi
-  "$STATE_HELPER" set "$ROLE" pr_labeled_last_seen_utc "$PR_LABELED_LAST_SEEN"
-fi
+}
+
+# init_pr_labeled_hwm — read PR_LABELED_LAST_SEEN with first-run backfill.
+# Idempotent. Sets the global var; called from poll_once.
+init_pr_labeled_hwm() {
+  PR_LABELED_LAST_SEEN="$("$STATE_HELPER" get "$ROLE" pr_labeled_last_seen_utc)"
+  if [ -z "$PR_LABELED_LAST_SEEN" ] || [ "$PR_LABELED_LAST_SEEN" = "null" ]; then
+    PR_LABELED_LAST_SEEN="$(date -u -d "$PR_LABELED_BACKFILL" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
+    if [ -z "$PR_LABELED_LAST_SEEN" ]; then
+      PR_LABELED_LAST_SEEN="$(date -u -v-60S '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+        || date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    fi
+    "$STATE_HELPER" set "$ROLE" pr_labeled_last_seen_utc "$PR_LABELED_LAST_SEEN"
+  fi
+}
 
 # v3.1 (ADR-0008): label-conditional pr_merged fanout.
 #
@@ -697,6 +711,18 @@ poll_once() {
 
   # Heartbeat FIRST — even if the rest fails, doctor can see we're alive.
   "$STATE_HELPER" heartbeat "$ROLE" >/dev/null 2>&1 || true
+
+  # BUG-#61 fix: refresh HWMs from state at the start of every poll, so a
+  # long-running --loop watcher's local HWM vars don't drift behind the state
+  # file's HWM (which advances on every poll's tail below at `$STATE_HELPER set
+  # ... last_seen_utc "$now"`). The 3 reads below were previously at script
+  # start (pre-fix) and frozen there for the lifetime of the --loop process,
+  # so the gh queries (query_assigned_issues, query_pr_mentions,
+  # query_pr_merged, query_pr_labeled, query_board_changes) kept returning
+  # historical events with old `updatedAt`.
+  LAST_SEEN="$("$STATE_HELPER" get "$ROLE" last_seen_utc)"
+  init_pr_merged_hwm
+  init_pr_labeled_hwm
 
   local assigned reviews commits mentions stale board pr_merged pr_labeled
   assigned="$(query_assigned_issues || echo '[]')"

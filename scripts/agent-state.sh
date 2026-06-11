@@ -30,7 +30,7 @@ set -euo pipefail
 
 STATE_DIR="${AGENT_STATE_DIR:-/var/log/dev-studio/agent-state}"
 DEFAULT_POLL="${AGENT_POLL_INTERVAL_SEC:-60}"
-DEFAULT_TRIM_MAX="${AGENT_PROCESSED_MAX:-50}"
+DEFAULT_TRIM_MAX="${AGENT_PROCESSED_MAX:-200}"
 DEFAULT_STALE_SEC="${AGENT_HEARTBEAT_STALE_SEC:-300}"
 
 # --- preflight ---
@@ -165,8 +165,11 @@ cmd_heartbeat() {
 
 # v2: keep processed_event_ids bounded (FIFO trim to last N).
 # Without this the array grows unbounded across months of runtime — JSON parse
-# slows down, watcher RAM creeps. Default 50 is enough headroom that the
-# dedup window covers ~hours of activity even at peak burst.
+# slows down, watcher RAM creeps. Default 200 (post issue-#61 fix, was 50)
+# is generous backstop headroom so the dedup window survives a watcher's
+# `LAST_SEEN` being momentarily stale (issue #61 Bug A: `LAST_SEEN` was frozen
+# at script start; now refreshed on every poll). 200 covers ~hours of activity
+# even at peak burst across all event families.
 cmd_trim() {
   require_jq
   local role="$1"

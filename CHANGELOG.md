@@ -8,6 +8,22 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **#61 — Watcher phantom re-delivery of `board-*` events (P1).** Orchestrator's
+  `agent-watch.sh` loop was receiving the same two `label_change` events
+  (`board-50-*`, `board-52-*`) repeatedly across polls, even though both source
+  issues are CLOSED with `status:done` and the resolving PRs (#51, #54) are
+  merged. Two interacting bugs caused the dedup chain to fail: **(A)** the
+  three HWM vars (`LAST_SEEN`, `PR_MERGED_LAST_SEEN`, `PR_LABELED_LAST_SEEN`)
+  were read ONCE at script start and never refreshed inside `poll_once`, so a
+  long-running `--loop` watcher's local vars drifted behind the state file's
+  HWM and the gh query kept returning historical events; **(B)** the
+  `processed_event_ids` FIFO trim (default 50) was evicting the still-active
+  phantom event IDs as newer events flooded in. The fix moves all three HWM
+  reads into `poll_once` (via `init_pr_merged_hwm` and `init_pr_labeled_hwm`
+  helpers) and bumps `DEFAULT_TRIM_MAX` from 50 to 200 as a backstop. The
+  orchestrator's INBOX is now clean across 10+ consecutive polls. Regression
+  pin: `scripts/tests/d213-phantom-board-dedup.sh` (10/10 PASS).
+
 - **STORY-002 — `app/main.py` now registers a SIGTERM handler (TC-8 unblock).**
   `kill <pid>` (SIGTERM) on the uvicorn process used to exit with code
   `143` (= 128 + SIGTERM), which breaks container/k8s/systemd graceful
