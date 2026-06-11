@@ -353,13 +353,23 @@ when the architect/tester actually skip the event.
 
 ## 9. Future work
 
-- **D2.2 — PR-open / PR-review-requested routing** (planned): wake architect
-  on `pull_request: labeled` events when `needs-architect-review` is added,
-  closing the loop that ADR-0008 § 8.2 references. Outside D2.1.x scope.
+- **D2.2 — PR-open / PR-review-requested routing** ✅ **DONE** — see
+  [ADR-0009](./ADR-0009-pr-labeled-fanout.md). Closed the loop; architect
+  and tester now wake on `pull_request: labeled` semantics.
 - **D2.3 — Doctor time-travel mode** (optional): `agent-doctor.sh --fanout
   PR_NUM --at TIMESTAMP` to simulate the decision at any historical moment
   (uses `timelineItems` GraphQL). Avoids the "doctor vs runtime" confusion
   we hit in Smoke S3 by making the time-of-evaluation explicit.
+
+### 9.1 Update on § 8.2 (post-ADR-0009)
+
+§ 8.2 above correctly identified that architect/tester wake should happen via
+a PR-open path, not `pr_merged`. ADR-0009 implements that path. The
+interaction between ADR-0007 (label cleanup on merge) and the new
+`pr_labeled` event is **non-racy by construction**: the wake fires at
+label-add time (during PR-open lifecycle), and ADR-0007 strips the label at
+merge time — by which point the wake has already happened and the event id
+is in the dedup ring. No contract change to ADR-0007 is required.
 
 ---
 

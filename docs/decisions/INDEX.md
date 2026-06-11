@@ -7,7 +7,14 @@ one in its `Supersedes` field.
 | ID | Title | Status | Date | Deciders | Related |
 |----|-------|--------|------|----------|---------|
 | [ADR-0001](ADR-0001-fastapi-skeleton.md) | FastAPI service skeleton — Python pin, package manager, run command, layout | Accepted | 2026-06-10 | @architect, @atilcan65 | STORY-001, STORY-002, STORY-003, STORY-004 |
-| ADR-0002 | _(planned)_ GitHub Actions action pin policy + cache strategy | Proposed (queued) | — | @architect | STORY-003 |
+| [ADR-0002](ADR-0002-github-native-autonomy.md) | GitHub-native autonomy (auto-kickoff) | Accepted | 2026-06-10 | @architect, @orchestrator | — |
+| [ADR-0003](ADR-0003-event-model-v2.md) | Event Model v2 — template-grade silent-failure prevention | Accepted | 2026-06-10 | @architect | — |
+| [ADR-0004](ADR-0004-bootstrap-kickoff.md) | Bootstrap kickoff | Accepted | 2026-06-10 | @architect | — |
+| [ADR-0005](ADR-0005-pr-merged-events.md) | `pr_merged` events (unconditional 5-role wake) | Accepted (fanout policy superseded by ADR-0008) | 2026-06-11 | @architect | ADR-0008 |
+| [ADR-0006](ADR-0006-watcher-resilience.md) | Watcher resilience (systemd --user + auto-reload) | Accepted | 2026-06-11 | @orchestrator, @atilcan65 | ADR-0002, ADR-0005 |
+| [ADR-0007](ADR-0007-label-cleanup.md) | Auto label cleanup via GitHub Action | Accepted | 2026-06-11 | @architect, @atilcan65 | ADR-0002, ADR-0005, ADR-0008, ADR-0009 |
+| [ADR-0008](ADR-0008-label-conditional-fanout.md) | Label-conditional `pr_merged` fanout (Event Model v3.1) | Accepted | 2026-06-11 | @architect | ADR-0003, ADR-0005, ADR-0006, ADR-0007 |
+| [ADR-0009](ADR-0009-pr-labeled-fanout.md) | PR-open `pr_labeled` fanout (closes ADR-0008 § 8.2 loop) | Accepted | 2026-06-11 | @architect | ADR-0007, ADR-0008, issue #47 (D2.2) |
 
 ## Conventions
 
@@ -19,4 +26,4 @@ one in its `Supersedes` field.
 
 ## Pending proposals
 
-- **ADR-0002** — GitHub Actions action pin policy + cache strategy. Required before STORY-003 implementation begins. Architect will draft when STORY-003 enters `Ready`.
+_(none — backlog of future-work items lives in each ADR's "Future work" / "Out of scope" section, e.g. ADR-0008 § 9, ADR-0009 § 8.)_
