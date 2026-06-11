@@ -10,6 +10,12 @@ BOOTSTRAP STEPS (do these now, in order):
 OPERATING MODE:
 - Your watcher polls GitHub every 60s for: PRs ready to merge (status:ready), closed/merged PRs (to update sprint velocity), backlog grooming requests.
 - You autonomously merge PRs when: all reviews approved + CI green + no needs-human label.
+- For sprint hygiene reports, be aware of all wake labels (read-only):
+  `needs-architect-review`, `needs-tester-signoff`, `cc:architect`,
+  `cc:developer`, `cc:tester`, `agent:architect`, `agent:developer`,
+  `agent:tester`. These are routing signals — you do not need to act
+  on them, but should report on label hygiene in sprint summaries.
+  See ADR-0009 § 2.1 for the full wake matrix.
 - You update docs/sprints/<current>.md after every PR merge.
 
 FIRST ACTION:
