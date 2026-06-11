@@ -342,7 +342,7 @@ fanout_mode() {
   local merged="false"
   [ "$state" = "MERGED" ] && merged="true"
 
-  printf "${B}agent-doctor --fanout (ADR-0008 label-conditional pr_merged)${D}\n\n"
+  printf "${B}agent-doctor --fanout (ADR-0008 pr_merged + ADR-0009 pr_labeled)${D}\n\n"
   printf "  PR #%s  sha=%s  state=%s  merged=%s\n" "$pr_num" "$sha" "$state" "$merged"
   printf "  Title:    %s\n" "$title"
   printf "  MergedAt: %s\n" "$merged_at"
@@ -391,9 +391,91 @@ fanout_mode() {
     printf "     (default-fanout is empty AND no label rules matched)\n\n"
   fi
 
+  # --- ADR-0009 (D2.2): pr_labeled fanout (waking NOW on current label set) ---
+  # Per ADR-0009 § 2.5, this section shows the wake decision against the PR's
+  # CURRENT open-state labels. After merge + ADR-0007 cleanup, labels are
+  # stripped and the wake column collapses to (none) for human-decision roles
+  # — that's exactly the race ADR-0009 closes by firing at label-add time.
+  # ADR-0009 § 6: empty string must disable the path (kill switch). Using
+  # `${VAR-default}` (not `${VAR:-default}`) so empty string is honored and
+  # only the unset case falls back to the default. Fixes BUG-1 (kill switch
+  # was silently re-defaulted by `:-` on empty).
+  PR_LABELED_FANOUT="${PR_LABELED_FANOUT-architect tester}"
+
+  role_receives_pr_labeled() {
+    local r="$1"
+    case " $PR_LABELED_FANOUT " in
+      *" $r "*) return 0 ;;
+      *) return 1 ;;
+    esac
+  }
+  role_wakes_for_pr_labeled() {
+    local r="$1" labels_json="$2"
+    case "$r" in
+      architect)
+        echo "$labels_json" | jq -e 'any(.[]?; . == "needs-architect-review" or . == "cc:architect" or . == "agent:architect")' >/dev/null 2>&1 && return 0
+        ;;
+      tester)
+        echo "$labels_json" | jq -e 'any(.[]?; . == "needs-tester-signoff" or . == "cc:tester" or . == "agent:tester")' >/dev/null 2>&1 && return 0
+        ;;
+    esac
+    return 1
+  }
+
+  printf "  ${B}pr_labeled fanout (ADR-0009 — waking NOW on current label set)${D}\n"
+  printf "    PR_LABELED_FANOUT                = %s\n" "$(echo -n "$PR_LABELED_FANOUT" | sed 's/^$/(empty — pr_labeled disabled)/')"
+  printf "    PR state                         = %s\n\n" "$state"
+
+  # ADR-0009 § 2.5.1: --check-env parity with PR_MERGED_FANOUT_DEFAULT.
+  # An empty PR_LABELED_FANOUT is a silent no-op landmine: PR-open routing
+  # is disabled entirely and architect/tester will never wake on label-add.
+  # Warn loudly — parallel to D-2.1.1's architect-skipped-on-merge fix.
+  if [ -z "$PR_LABELED_FANOUT" ]; then
+    printf "  ${Y}⚠ PR_LABELED_FANOUT is empty${D} — pr_labeled event disabled entirely.\n"
+    printf "     architect/tester will NOT wake on PR label-add (ADR-0009 § 2.1 routing\n"
+    printf "     skipped). If this is intentional, ignore. Otherwise:\n"
+    printf "       export PR_LABELED_FANOUT=\"architect tester\"  # restore default\n\n"
+  fi
+
+  printf "    %-16s %-6s %s\n" "ROLE" "WAKES" "REASON"
+  local any_lab_wakes=0
+  for role in "${ROLES[@]}"; do
+    local lwakes lreason
+    if ! role_receives_pr_labeled "$role"; then
+      lwakes="no"; lreason="not in PR_LABELED_FANOUT"
+    elif [ "$state" != "OPEN" ]; then
+      lwakes="no"; lreason="PR not open (state=$state) — pr_labeled only fires on open PRs"
+    elif role_wakes_for_pr_labeled "$role" "$labels_json"; then
+      lwakes="yes"
+      any_lab_wakes=1
+      case "$role" in
+        architect) lreason="label match: needs-architect-review / cc:architect / agent:architect" ;;
+        tester)    lreason="label match: needs-tester-signoff / cc:tester / agent:tester" ;;
+        *)         lreason="label match" ;;
+      esac
+    else
+      lwakes="no"
+      case "$role" in
+        architect) lreason="no needs-architect-review / cc:architect / agent:architect" ;;
+        tester)    lreason="no needs-tester-signoff / cc:tester / agent:tester" ;;
+        *)         lreason="not enrolled" ;;
+      esac
+    fi
+    local lcolour="$R"; [ "$lwakes" = "yes" ] && lcolour="$G"
+    printf "    %-16s ${lcolour}%-6s${D} %s\n" "$role" "$lwakes" "$lreason"
+  done
+  echo ""
+
+  if [ "$state" != "OPEN" ] && [ "$any_lab_wakes" -eq 0 ]; then
+    printf "  ${Y}ℹ Note:${D} this PR is %s. pr_labeled only fires while OPEN. If architect/tester were\n" "$state"
+    printf "     supposed to wake for this PR, check that they did so before merge —\n"
+    printf "     ADR-0007 cleanup strips needs-* labels post-merge by design (ADR-0009 § 4.1).\n\n"
+  fi
+
   printf "  ${B}Override examples${D}\n"
   printf "    PR_MERGED_FANOUT_DEFAULT=\"\" %s --fanout %s            # rules-only mode\n" "$0" "$pr_num"
   printf "    PR_MERGED_FANOUT_RULES_ENABLED=false %s --fanout %s    # D2 behaviour (no labels)\n" "$0" "$pr_num"
+  printf "    PR_LABELED_FANOUT=\"\" %s --fanout %s                   # disable D2.2 PR-open routing\n" "$0" "$pr_num"
   echo ""
 }
 

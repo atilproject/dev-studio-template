@@ -141,6 +141,24 @@ if [ -z "$PR_MERGED_LAST_SEEN" ] || [ "$PR_MERGED_LAST_SEEN" = "null" ]; then
   "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$PR_MERGED_LAST_SEEN"
 fi
 
+# v3.2 (ADR-0009): pr_labeled_last_seen_utc — HWM cursor for PR-open architect
+# /tester routing. Per ADR-0009 § 2.3, HWM is the PR's updatedAt (proxy for
+# "any change since last poll"), backfilled to (now - 60s) on first run to
+# prevent mass-wake at rollout (every open PR with a wake-trigger label would
+# otherwise flood the panes). 60s == default poll window so we won't miss a
+# wake that happened during a brief watcher restart.
+PR_LABELED_BACKFILL="${PR_LABELED_BACKFILL:-60 seconds ago}"
+PR_LABELED_LAST_SEEN="$("$STATE_HELPER" get "$ROLE" pr_labeled_last_seen_utc)"
+if [ -z "$PR_LABELED_LAST_SEEN" ] || [ "$PR_LABELED_LAST_SEEN" = "null" ]; then
+  PR_LABELED_LAST_SEEN="$(date -u -d "$PR_LABELED_BACKFILL" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null)"
+  if [ -z "$PR_LABELED_LAST_SEEN" ]; then
+    # BSD fallback: parse "<N> <unit>" or just default to 60s ago.
+    PR_LABELED_LAST_SEEN="$(date -u -v-60S '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+      || date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  fi
+  "$STATE_HELPER" set "$ROLE" pr_labeled_last_seen_utc "$PR_LABELED_LAST_SEEN"
+fi
+
 # v3.1 (ADR-0008): label-conditional pr_merged fanout.
 #
 # Two layers:
@@ -160,6 +178,19 @@ fi
 # least query merged PRs and let the per-PR filter decide later.
 PR_MERGED_FANOUT_DEFAULT="${PR_MERGED_FANOUT_DEFAULT:-orchestrator product-manager developer}"
 PR_MERGED_FANOUT_RULES_ENABLED="${PR_MERGED_FANOUT_RULES_ENABLED:-true}"
+
+# v3.2 (ADR-0009): pr_labeled fanout — PR-open architect/tester routing.
+# Closes ADR-0008 § 8.2 loop: architect/tester wake on label-add at PR-open
+# time, BEFORE label-cleanup.yml (ADR-0007) can strip the wake-trigger label.
+#
+# Roles in PR_LABELED_FANOUT wake when an OPEN PR carries any wake-trigger
+# label for their role (see role_wakes_for_pr_labeled). Empty string disables
+# the entire path — kill switch matches ADR-0009 § 6 Reversal.
+# ADR-0009 § 6: empty string must disable the path (kill switch). Using
+# `${VAR-default}` (not `${VAR:-default}`) so empty string is honored and
+# only the unset case falls back to the default. Fixes BUG-1 (kill switch
+# was silently re-defaulted by `:-` on empty).
+PR_LABELED_FANOUT="${PR_LABELED_FANOUT-architect tester}"
 
 # True if $role is in the always-woken default set.
 role_in_default_fanout() {
@@ -188,6 +219,62 @@ role_receives_pr_merged() {
   role_in_default_fanout "$r" && return 0
   role_eligible_via_label_rules "$r" && return 0
   return 1
+}
+
+# v3.2 (ADR-0009): pr_labeled gating + matching.
+#
+# role_receives_pr_labeled — query-level gate: is this role enrolled in
+# PR_LABELED_FANOUT? If not, skip the gh pr list call entirely.
+role_receives_pr_labeled() {
+  local r="$1"
+  case " $PR_LABELED_FANOUT " in
+    *" $r "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# role_wakes_for_pr_labeled — per-PR filter: does the OPEN PR carry any of
+# this role's wake-trigger labels? Per ADR-0009 § 2.1:
+#   architect: needs-architect-review, cc:architect, agent:architect
+#   tester:    needs-tester-signoff,   cc:tester,    agent:tester
+# Exact-name match (NOT regex) per ADR-0009 § 2.1 "Correction to issue #47 AC".
+#   $1 = role
+#   $2 = JSON array of label name strings (from PR's labels field)
+# Returns 0 (wake) / 1 (skip).
+role_wakes_for_pr_labeled() {
+  local r="$1" labels_json="$2"
+  case "$r" in
+    architect)
+      echo "$labels_json" | jq -e '
+        any(.[]?; . == "needs-architect-review" or . == "cc:architect" or . == "agent:architect")
+      ' >/dev/null 2>&1 && return 0
+      ;;
+    tester)
+      echo "$labels_json" | jq -e '
+        any(.[]?; . == "needs-tester-signoff" or . == "cc:tester" or . == "agent:tester")
+      ' >/dev/null 2>&1 && return 0
+      ;;
+  esac
+  return 1
+}
+
+# pr_labeled_wake_reason — returns the first matching wake-trigger label name,
+# for event observability (context.wake_reason per ADR-0009 § 2.2 / § 4.3).
+pr_labeled_wake_reason() {
+  local r="$1" labels_json="$2"
+  case "$r" in
+    architect)
+      echo "$labels_json" | jq -r '
+        (map(select(. == "needs-architect-review" or . == "cc:architect" or . == "agent:architect")) | .[0]) // ""
+      '
+      ;;
+    tester)
+      echo "$labels_json" | jq -r '
+        (map(select(. == "needs-tester-signoff" or . == "cc:tester" or . == "agent:tester")) | .[0]) // ""
+      '
+      ;;
+    *) echo "" ;;
+  esac
 }
 
 # Per-PR fanout decision: given a role and a JSON labels array, should this PR
@@ -445,6 +532,87 @@ query_pr_merged() {
   echo "$filtered"
 }
 
+# v3.2 (ADR-0009 D2.2): PR-open architect/tester routing via pr_labeled.
+#
+# Why not Events API? Per ADR-0009 § 3 "Alternatives", we use the cheaper
+# `gh pr list --state open` query with PR.updatedAt as HWM proxy. Cost:
+# 1 API call per role per poll (only architect/tester are enrolled by default,
+# so 2 calls/min total). Trade-off vs label-event precision is logged as
+# TD-002 (docs/tech-debt.md) with a 5%-suppression-rate payoff trigger.
+#
+# Event ID = `pr-labeled-<n>-<updatedAt>` — stable per (PR, wake-tick). Re-poll
+# of the same PR within one updatedAt window produces the same ID, which the
+# processed_event_ids ring suppresses. A force-push or comment bumps updatedAt
+# → new ID → re-wake (acceptable; agent sees fresh signal).
+#
+# Suppression observability: when role_receives_pr_labeled is true but no PR
+# matches role_wakes_for_pr_labeled, we still advance the HWM (D2.1.2 pattern).
+# Future TD-002 instrumentation will log pr_labeled_suppressed_quick_removal
+# when the dedup ring detects > 5% same-PR re-evaluation churn (deferred to D2.2.1).
+PR_LABELED_NEWEST_SEEN=""
+
+query_pr_labeled() {
+  PR_LABELED_NEWEST_SEEN=""
+  role_receives_pr_labeled "$ROLE" || { echo '[]'; return; }
+
+  # Fetch all OPEN PRs with their labels + updatedAt.
+  local raw
+  raw="$(gh pr list \
+    --repo "$REPO" \
+    --state open \
+    --limit 50 \
+    --json number,title,url,updatedAt,labels,isDraft \
+    --jq "[ .[] | select(.updatedAt > \"$PR_LABELED_LAST_SEEN\") |
+           {
+             number,
+             title,
+             url,
+             updatedAt,
+             isDraft,
+             labels: [.labels[].name]
+           } ]" 2>/dev/null || echo '[]')"
+
+  # D2.1.2-style inline HWM bump: advance even when label filter drops all PRs.
+  local newest
+  newest="$(echo "$raw" | jq -r '[.[].updatedAt] | max // empty')"
+  PR_LABELED_NEWEST_SEEN="$newest"
+  if [ -n "$newest" ] && [ "$newest" != "null" ]; then
+    "$STATE_HELPER" set "$ROLE" pr_labeled_last_seen_utc "$newest"
+  fi
+
+  # Per-PR filter: only keep PRs whose labels match this role's wake-trigger set.
+  local filtered='[]' n i pr labels_json wake_reason
+  n="$(echo "$raw" | jq 'length')"
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    pr="$(echo "$raw" | jq -c ".[$i]")"
+    labels_json="$(echo "$pr" | jq -c '.labels')"
+    if role_wakes_for_pr_labeled "$ROLE" "$labels_json"; then
+      wake_reason="$(pr_labeled_wake_reason "$ROLE" "$labels_json")"
+      filtered="$(jq -c -n \
+        --argjson acc "$filtered" \
+        --argjson p "$pr" \
+        --arg reason "label:${wake_reason}" \
+        '$acc + [{
+          id: ("pr-labeled-" + ($p.number | tostring) + "-" + $p.updatedAt),
+          kind: "pr_labeled",
+          number: $p.number,
+          title: $p.title,
+          url: $p.url,
+          updated_at: $p.updatedAt,
+          context: {
+            labels: $p.labels,
+            wake_reason: $reason,
+            pr_state: "open",
+            isDraft: $p.isDraft
+          }
+        }]')"
+    fi
+    i=$((i+1))
+  done
+  echo "$filtered"
+}
+
 # Orchestrator has a wider lens: all label changes on any issue/PR.
 query_board_changes() {
   if [ "$ROLE" != "orchestrator" ]; then
@@ -526,7 +694,7 @@ poll_once() {
   # Heartbeat FIRST — even if the rest fails, doctor can see we're alive.
   "$STATE_HELPER" heartbeat "$ROLE" >/dev/null 2>&1 || true
 
-  local assigned reviews commits mentions stale board pr_merged
+  local assigned reviews commits mentions stale board pr_merged pr_labeled
   assigned="$(query_assigned_issues || echo '[]')"
   reviews="$(query_review_requests || echo '[]')"
   commits="$(query_new_commits_on_assigned_prs || echo '[]')"
@@ -534,13 +702,14 @@ poll_once() {
   stale="$(query_stale_cc 2>/dev/null || echo '[]')"
   board="$(query_board_changes || echo '[]')"
   pr_merged="$(query_pr_merged 2>/dev/null || echo '[]')"
+  pr_labeled="$(query_pr_labeled 2>/dev/null || echo '[]')"
 
   # Merge and dedupe
   local merged
   merged="$(jq -s 'add | unique_by(.id)' \
     <(echo "$assigned") <(echo "$reviews") <(echo "$commits") \
     <(echo "$mentions") <(echo "$stale") <(echo "$board") \
-    <(echo "$pr_merged"))"
+    <(echo "$pr_merged") <(echo "$pr_labeled"))"
 
   # Filter out events already in processed_event_ids
   local state_file new_events
