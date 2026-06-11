@@ -326,19 +326,21 @@ fanout_mode() {
   # Fetch PR metadata
   local pr_json
   pr_json="$(gh pr view "$pr_num" --repo "$REPO" \
-    --json number,title,state,merged,mergedAt,headRefOid,labels 2>/dev/null || true)"
+    --json number,title,state,mergedAt,headRefOid,labels 2>/dev/null || true)"
   if [ -z "$pr_json" ] || [ "$pr_json" = "null" ]; then
     echo "ERROR: PR #${pr_num} not found in ${REPO}" >&2
     exit 2
   fi
 
-  local title state merged merged_at sha labels_json
+  local title state merged_at sha labels_json
   title="$(echo "$pr_json"      | jq -r '.title')"
   state="$(echo "$pr_json"      | jq -r '.state')"
-  merged="$(echo "$pr_json"     | jq -r '.merged')"
   merged_at="$(echo "$pr_json"  | jq -r '.mergedAt // "-"')"
   sha="$(echo "$pr_json"        | jq -r '.headRefOid[:7]')"
   labels_json="$(echo "$pr_json" | jq -c '[.labels[].name]')"
+  # 'merged' field removed in gh 2.40+; derive from state + mergedAt.
+  local merged="false"
+  [ "$state" = "MERGED" ] && merged="true"
 
   printf "${B}agent-doctor --fanout (ADR-0008 label-conditional pr_merged)${D}\n\n"
   printf "  PR #%s  sha=%s  state=%s  merged=%s\n" "$pr_num" "$sha" "$state" "$merged"

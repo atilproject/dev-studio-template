@@ -413,8 +413,14 @@ query_pr_merged() {
              }
            } ]")"
 
-  # Record the newest merged_at across the *unfiltered* set so HWM can advance.
-  PR_MERGED_NEWEST_SEEN="$(echo "$raw" | jq -r '[.[].context.merged_at] | max // empty')"
+  # v3.1.1: bump HWM here (not in poll_once) so we don't depend on a global
+  # surviving the $(query_pr_merged) subshell. Subshells lose parent vars.
+  local newest
+  newest="$(echo "$raw" | jq -r '[.[].context.merged_at] | max // empty')"
+  PR_MERGED_NEWEST_SEEN="$newest"  # kept for backward compat / unit tests
+  if [ -n "$newest" ] && [ "$newest" != "null" ]; then
+    "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$newest"
+  fi
 
   # v3.1 (ADR-0008): per-PR label-conditional filter.
   # Default-fanout roles keep every PR (D2 behaviour, fast path).
@@ -561,16 +567,10 @@ poll_once() {
   # Bump last_seen
   "$STATE_HELPER" set "$ROLE" last_seen_utc "$now"
 
-  # v3.1 (ADR-0008): bump pr_merged_last_seen_utc to the newest merged_at SEEN
-  # by this poll — PR_MERGED_NEWEST_SEEN reflects the unfiltered query result, so
-  # the HWM advances even when label rules filtered every PR out for this role.
-  # Without this, architect/tester would re-query the same backfill window every
-  # poll forever, relying on dedup to suppress duplicates (wasteful, fragile).
-  if role_receives_pr_merged "$ROLE"; then
-    if [ -n "$PR_MERGED_NEWEST_SEEN" ] && [ "$PR_MERGED_NEWEST_SEEN" != "null" ]; then
-      "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$PR_MERGED_NEWEST_SEEN"
-    fi
-  fi
+  # v3.1.1 (ADR-0008): HWM bump now lives inside query_pr_merged because the
+  # subshell `$(query_pr_merged)` capture above drops any globals set by the
+  # callee. The role still advances pr_merged_last_seen_utc on every poll even
+  # when label rules filtered every PR out for this role.
 
   # Auto-mark events as processed (the agent can also call mark explicitly)
   echo "$new_events" | jq -r '.[].id' | while read -r eid; do
