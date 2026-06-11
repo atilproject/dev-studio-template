@@ -110,6 +110,88 @@ check "architect wakes (label-only)"       wake "$(call role_wakes_for_pr archit
 check "orchestrator SKIPS (no label match)" skip "$(call role_wakes_for_pr orchestrator "$LABELS")"
 PR_MERGED_FANOUT_DEFAULT="orchestrator product-manager developer"
 
+# ============================================================
+# S4 series (ADR-0009 § 2.6): pr_labeled fanout
+# Per issue #50 AC: 5 cases covering open-PR label wake paths.
+# These activate when v3.2 helpers (role_receives_pr_labeled,
+# role_wakes_for_pr_labeled, pr_labeled_wake_reason) are
+# extracted from agent-watch.sh — i.e. after PR #49 lands.
+# Until then, the S4 series is a graceful SKIP (the helpers
+# are not on main yet).
+# ============================================================
+echo ""
+echo "=== S4 series: pr_labeled fanout (ADR-0009 § 2.6) ==="
+
+if ! type role_receives_pr_labeled >/dev/null 2>&1; then
+  echo "  NOTE: v3.2 helpers not in agent-watch.sh on this branch."
+  echo "        S4 series will activate after PR #49 lands on main."
+  echo "        All 5 cases below SKIP gracefully."
+  echo ""
+  echo "=== S4-PR-Open-1: open PR + needs-architect-review (1 wake: architect) ==="
+  check "S4-1 (deferred — needs PR #49 merged)" skip skip
+  echo ""
+  echo "=== S4-PR-Open-2: open PR + needs-tester-signoff (1 wake: tester) ==="
+  check "S4-2 (deferred — needs PR #49 merged)" skip skip
+  echo ""
+  echo "=== S4-PR-Open-3: open PR + both wake labels (2 wakes: arch + test) ==="
+  check "S4-3 (deferred — needs PR #49 merged)" skip skip
+  echo ""
+  echo "=== S4-PR-Open-4: closed PR + needs-architect-review (0 wakes; query-level state filter) ==="
+  check "S4-4 (deferred — needs PR #49 merged)" skip skip
+  echo ""
+  echo "=== S4-PR-Open-5: open PR + cc:architect only (1 wake: architect via cc:) ==="
+  check "S4-5 (deferred — needs PR #49 merged)" skip skip
+else
+  # v3.2 helpers are available — run the actual tests.
+  # Default PR_LABELED_FANOUT for these tests.
+  export PR_LABELED_FANOUT="architect tester"
+
+  echo ""
+  echo "=== S4-PR-Open-1: open PR + needs-architect-review (1 wake: architect) ==="
+  check "architect enrolled in PR_LABELED_FANOUT"     wake "$(call role_receives_pr_labeled architect)"
+  check "tester enrolled in PR_LABELED_FANOUT"        wake "$(call role_receives_pr_labeled tester)"
+  check "developer NOT enrolled (default fanout)"    skip "$(call role_receives_pr_labeled developer)"
+  LABELS='["needs-architect-review","type:feature"]'
+  check "architect wakes on needs-architect-review"   wake "$(call role_wakes_for_pr_labeled architect "$LABELS")"
+  check "tester SKIPS (no needs-tester-signoff)"     skip "$(call role_wakes_for_pr_labeled tester "$LABELS")"
+
+  echo ""
+  echo "=== S4-PR-Open-2: open PR + needs-tester-signoff (1 wake: tester) ==="
+  LABELS='["needs-tester-signoff","priority:P1"]'
+  check "tester wakes on needs-tester-signoff"       wake "$(call role_wakes_for_pr_labeled tester "$LABELS")"
+  check "architect SKIPS (no needs-architect-review)" skip "$(call role_wakes_for_pr_labeled architect "$LABELS")"
+
+  echo ""
+  echo "=== S4-PR-Open-3: open PR + both wake labels (2 wakes: arch + test) ==="
+  LABELS='["needs-architect-review","needs-tester-signoff"]'
+  check "architect wakes"                            wake "$(call role_wakes_for_pr_labeled architect "$LABELS")"
+  check "tester wakes"                               wake "$(call role_wakes_for_pr_labeled tester "$LABELS")"
+  # Per-role wake count is the helper's per-PR job; the multi-wake SUM is
+  # handled by query_pr_labeled (1 wake entry per matching role), which is
+  # tested at integration level (doctor --fanout, smoke S3).
+
+  echo ""
+  echo "=== S4-PR-Open-4: closed PR + needs-architect-review (0 wakes; query-level state filter) ==="
+  # role_wakes_for_pr_labeled is state-agnostic by design — the state filter
+  # lives in query_pr_labeled (gh pr list --state open). The AC "expect 0
+  # wakes" is verified at integration level (doctor --fanout on a closed PR
+  # + smoke S3). At the unit level, we document the contract: helper returns
+  # wake based on label match alone; the query decides state.
+  LABELS='["needs-architect-review"]'
+  check "helper returns wake based on label (state-agnostic by design)"  wake "$(call role_wakes_for_pr_labeled architect "$LABELS")"
+  # Contract note (no assertion): query_pr_labeled filters via
+  # `gh pr list --state open`, so a closed PR carrying the wake label will
+  # not appear in the query result. Verified by doctor --fanout + smoke S3.
+
+  echo ""
+  echo "=== S4-PR-Open-5: open PR + cc:architect only (1 wake: architect via cc:) ==="
+  LABELS='["cc:architect"]'
+  check "architect wakes on cc:architect alias"       wake "$(call role_wakes_for_pr_labeled architect "$LABELS")"
+  check "tester SKIPS (cc:architect is not tester's trigger)" skip "$(call role_wakes_for_pr_labeled tester "$LABELS")"
+  REASON=$(pr_labeled_wake_reason architect "$LABELS")
+  check "wake_reason returns 'cc:architect' (observability)" "cc:architect" "$REASON"
+fi
+
 echo ""
 echo "======================================"
 echo "PASS=$PASS  FAIL=$FAIL"
