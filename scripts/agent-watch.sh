@@ -1,9 +1,14 @@
 #!/usr/bin/env bash
 # agent-watch.sh — GitHub-native autonomy: poll for new wake-up events for a role.
 #
-# Per ADR-0002 + ADR-0003 (Event Model v2): each agent's work queue lives on
-# GitHub. This script queries the queue, diffs against the agent's state file,
-# and emits new events as JSON.
+# Per ADR-0002 + ADR-0003 + ADR-0005 (Event Model v3): each agent's work queue
+# lives on GitHub. This script queries the queue, diffs against the agent's
+# state file, and emits new events as JSON.
+#
+# Event Model v3 (ADR-0005) adds `pr_merged` to the v2 taxonomy:
+#   When a PR is merged, the watcher fans out a `pr-merged-<n>-<sha7>` event to
+#   orchestrator + product-manager + developer (the post-merge lifecycle MVP).
+#   Architect/tester get label-conditional fanout in a later iteration.
 #
 # Event Model v2 (ADR-0003):
 #   Event IDs include `headRefOid` (commit SHA) for PR events, so a new push
@@ -37,7 +42,7 @@
 #     "new_events": [
 #       {
 #         "id": "<unique event id>",
-#         "kind": "issue_assigned|pr_review_requested|pr_new_commit|pr_comment_mention|stale_cc|label_change",
+#         "kind": "issue_assigned|pr_review_requested|pr_new_commit|pr_comment_mention|stale_cc|label_change|pr_merged",
 #         "number": <int>,
 #         "title": "<str>",
 #         "url": "<str>",
@@ -107,6 +112,30 @@ require_gh
 LAST_SEEN="$("$STATE_HELPER" get "$ROLE" last_seen_utc)"
 POLL_INTERVAL="$("$STATE_HELPER" get "$ROLE" poll_interval_sec)"
 POLL_INTERVAL="${POLL_INTERVAL:-60}"
+
+# v3: pr_merged_last_seen_utc — separate high-water mark for merged-PR polling.
+# Decoupled from last_seen_utc (which is event-mark-driven) to avoid race when
+# poll interval and merge interval overlap. Backfilled to (now - 5min) on first
+# read so we don't spam-replay every historical merge on a fresh state file.
+PR_MERGED_LAST_SEEN="$("$STATE_HELPER" get "$ROLE" pr_merged_last_seen_utc)"
+if [ -z "$PR_MERGED_LAST_SEEN" ] || [ "$PR_MERGED_LAST_SEEN" = "null" ]; then
+  PR_MERGED_LAST_SEEN="$(date -u -d '5 minutes ago' '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+    || date -u -v-5M '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
+    || date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$PR_MERGED_LAST_SEEN"
+fi
+
+# v3: pr_merged fanout — which roles receive pr-merged events (ADR-0005 MVP).
+# Architect/tester are excluded from MVP; label-conditional fanout is a follow-up.
+PR_MERGED_FANOUT_ROLES="orchestrator product-manager developer"
+
+role_receives_pr_merged() {
+  local r="$1"
+  case " $PR_MERGED_FANOUT_ROLES " in
+    *" $r "*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
 # --- query builders (role-specific filters) ---
 # Returns a JSON array of event objects (may be empty).
@@ -252,6 +281,43 @@ query_stale_cc() {
            } ]"
 }
 
+# v3 (ADR-0005): post-merge lifecycle. Fan out pr-merged events to the roles
+# listed in PR_MERGED_FANOUT_ROLES so developer/PM/orchestrator can run their
+# cleanup workflows (branch prune, board update, sprint refresh) without manual
+# pokes. Event ID = `pr-merged-<n>-<sha7>` where sha7 is the merge commit short
+# SHA — unique per merge so re-merges (force-push to main, rare) re-fire cleanly.
+#
+# Dedup defense:
+#   1. `pr_merged_last_seen_utc` high-water mark filters the gh query.
+#   2. `processed_event_ids` ring buffer (poll_once) drops anything already seen.
+#   3. Event ID embeds merge SHA — same PR re-merged with new SHA = new event.
+query_pr_merged() {
+  role_receives_pr_merged "$ROLE" || { echo '[]'; return; }
+
+  gh pr list \
+    --repo "$REPO" \
+    --state merged \
+    --search "merged:>${PR_MERGED_LAST_SEEN}" \
+    --limit 50 \
+    --json number,title,url,mergedAt,mergeCommit,author,labels \
+    --jq "[ .[] |
+           select(.mergeCommit != null and .mergeCommit.oid != null) |
+           {
+             id: (\"pr-merged-\" + (.number | tostring) + \"-\" + (.mergeCommit.oid[0:7])),
+             kind: \"pr_merged\",
+             number: .number,
+             title: .title,
+             url: .url,
+             updated_at: .mergedAt,
+             context: {
+               merge_sha: .mergeCommit.oid[0:7],
+               merged_at: .mergedAt,
+               author: (.author.login // \"unknown\"),
+               labels: [.labels[].name]
+             }
+           } ]"
+}
+
 # Orchestrator has a wider lens: all label changes on any issue/PR.
 query_board_changes() {
   if [ "$ROLE" != "orchestrator" ]; then
@@ -333,19 +399,21 @@ poll_once() {
   # Heartbeat FIRST — even if the rest fails, doctor can see we're alive.
   "$STATE_HELPER" heartbeat "$ROLE" >/dev/null 2>&1 || true
 
-  local assigned reviews commits mentions stale board
+  local assigned reviews commits mentions stale board pr_merged
   assigned="$(query_assigned_issues || echo '[]')"
   reviews="$(query_review_requests || echo '[]')"
   commits="$(query_new_commits_on_assigned_prs || echo '[]')"
   mentions="$(query_pr_mentions 2>/dev/null || echo '[]')"
   stale="$(query_stale_cc 2>/dev/null || echo '[]')"
   board="$(query_board_changes || echo '[]')"
+  pr_merged="$(query_pr_merged 2>/dev/null || echo '[]')"
 
   # Merge and dedupe
   local merged
   merged="$(jq -s 'add | unique_by(.id)' \
     <(echo "$assigned") <(echo "$reviews") <(echo "$commits") \
-    <(echo "$mentions") <(echo "$stale") <(echo "$board"))"
+    <(echo "$mentions") <(echo "$stale") <(echo "$board") \
+    <(echo "$pr_merged"))"
 
   # Filter out events already in processed_event_ids
   local state_file new_events
@@ -371,6 +439,17 @@ poll_once() {
 
   # Bump last_seen
   "$STATE_HELPER" set "$ROLE" last_seen_utc "$now"
+
+  # v3: bump pr_merged_last_seen_utc to the freshest mergedAt seen this poll.
+  # If pr_merged was empty, leave the mark in place so the next poll keeps the
+  # same window open (handles "merged after we queried, before we wrote mark").
+  if role_receives_pr_merged "$ROLE"; then
+    local newest_merge_at
+    newest_merge_at="$(echo "$pr_merged" | jq -r '[.[].context.merged_at] | max // empty')"
+    if [ -n "$newest_merge_at" ] && [ "$newest_merge_at" != "null" ]; then
+      "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$newest_merge_at"
+    fi
+  fi
 
   # Auto-mark events as processed (the agent can also call mark explicitly)
   echo "$new_events" | jq -r '.[].id' | while read -r eid; do
