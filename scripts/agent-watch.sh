@@ -141,16 +141,86 @@ if [ -z "$PR_MERGED_LAST_SEEN" ] || [ "$PR_MERGED_LAST_SEEN" = "null" ]; then
   "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$PR_MERGED_LAST_SEEN"
 fi
 
-# v3: pr_merged fanout — which roles receive pr-merged events (ADR-0005 MVP).
-# Architect/tester are excluded from MVP; label-conditional fanout is a follow-up.
-PR_MERGED_FANOUT_ROLES="orchestrator product-manager developer"
+# v3.1 (ADR-0008): label-conditional pr_merged fanout.
+#
+# Two layers:
+#   1. PR_MERGED_FANOUT_DEFAULT — roles always woken on every merge (lifecycle).
+#      D2 MVP value: "orchestrator product-manager developer".
+#      Empty string = no default fanout (kill switch / debugging).
+#   2. PR_MERGED_FANOUT_RULES_ENABLED=true|false — when true (default), the
+#      following label patterns add extra roles per-PR:
+#        - needs-architect-review or agent:architect → +architect
+#        - needs-tester-signoff   or agent:tester    → +tester
+#      When false, only the default set is used (D2 behaviour, full rollback).
+#
+# Per-role gating (`role_receives_pr_merged`) decides at poll time whether THIS
+# watcher should run the pr_merged query at all. Without labels available it
+# returns true for any role in DEFAULT (so we run the query and pick up labels);
+# for architect/tester it also returns true when rules are enabled so they at
+# least query merged PRs and let the per-PR filter decide later.
+PR_MERGED_FANOUT_DEFAULT="${PR_MERGED_FANOUT_DEFAULT:-orchestrator product-manager developer}"
+PR_MERGED_FANOUT_RULES_ENABLED="${PR_MERGED_FANOUT_RULES_ENABLED:-true}"
 
-role_receives_pr_merged() {
+# True if $role is in the always-woken default set.
+role_in_default_fanout() {
   local r="$1"
-  case " $PR_MERGED_FANOUT_ROLES " in
+  case " $PR_MERGED_FANOUT_DEFAULT " in
     *" $r "*) return 0 ;;
     *) return 1 ;;
   esac
+}
+
+# True if $role can ever be woken by label rules (i.e. architect / tester when
+# rules are enabled). Used as a query-gate so architect/tester actually run the
+# gh query and we get to look at the labels.
+role_eligible_via_label_rules() {
+  [ "$PR_MERGED_FANOUT_RULES_ENABLED" = "true" ] || return 1
+  case "$1" in
+    architect|tester) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Query-level gate: should this watcher even run query_pr_merged?
+# Yes if role is in default OR rules might wake it via labels.
+role_receives_pr_merged() {
+  local r="$1"
+  role_in_default_fanout "$r" && return 0
+  role_eligible_via_label_rules "$r" && return 0
+  return 1
+}
+
+# Per-PR fanout decision: given a role and a JSON labels array, should this PR
+# wake the role? Inputs:
+#   $1 = role
+#   $2 = JSON array of label name strings (from pr_merged event context.labels)
+# Returns 0 (wake) / 1 (skip). Used to filter pr_merged events role-by-role.
+role_wakes_for_pr() {
+  local r="$1" labels_json="$2"
+
+  # Default-fanout roles always wake on merge (D2 behaviour preserved).
+  if role_in_default_fanout "$r"; then
+    return 0
+  fi
+
+  # Rules disabled → no extra fanout, default-only.
+  [ "$PR_MERGED_FANOUT_RULES_ENABLED" = "true" ] || return 1
+
+  # architect: needs-architect-review or agent:architect.
+  # tester:   needs-tester-signoff   or agent:tester.
+  case "$r" in
+    architect)
+      echo "$labels_json" | jq -e '
+        any(.[]?; . == "needs-architect-review" or . == "agent:architect")
+      ' >/dev/null 2>&1 && return 0
+      ;;
+    tester)
+      echo "$labels_json" | jq -e '
+        any(.[]?; . == "needs-tester-signoff" or . == "agent:tester")
+      ' >/dev/null 2>&1 && return 0
+      ;;
+  esac
+  return 1
 }
 
 # --- query builders (role-specific filters) ---
@@ -307,10 +377,20 @@ query_stale_cc() {
 #   1. `pr_merged_last_seen_utc` high-water mark filters the gh query.
 #   2. `processed_event_ids` ring buffer (poll_once) drops anything already seen.
 #   3. Event ID embeds merge SHA — same PR re-merged with new SHA = new event.
+# Side-channel: query_pr_merged exposes the newest merged_at it SAW (across all
+# merged PRs in the window, regardless of label filter) via the global
+# PR_MERGED_NEWEST_SEEN. This lets the HWM update advance even when label rules
+# filter every PR out for this role — otherwise architect/tester would re-query
+# the same backfill window forever and rely on dedup to suppress duplicates.
+PR_MERGED_NEWEST_SEEN=""
+
 query_pr_merged() {
+  PR_MERGED_NEWEST_SEEN=""
   role_receives_pr_merged "$ROLE" || { echo '[]'; return; }
 
-  gh pr list \
+  # Fetch all merged PRs in the backfill window with their labels.
+  local raw
+  raw="$(gh pr list \
     --repo "$REPO" \
     --state merged \
     --search "merged:>${PR_MERGED_LAST_SEEN}" \
@@ -331,7 +411,32 @@ query_pr_merged() {
                author: (.author.login // \"unknown\"),
                labels: [.labels[].name]
              }
-           } ]"
+           } ]")"
+
+  # Record the newest merged_at across the *unfiltered* set so HWM can advance.
+  PR_MERGED_NEWEST_SEEN="$(echo "$raw" | jq -r '[.[].context.merged_at] | max // empty')"
+
+  # v3.1 (ADR-0008): per-PR label-conditional filter.
+  # Default-fanout roles keep every PR (D2 behaviour, fast path).
+  # Architect/tester only keep PRs whose labels match the configured rules.
+  if role_in_default_fanout "$ROLE"; then
+    echo "$raw"
+    return
+  fi
+
+  # Walk the events one by one so each label set is checked by jq separately.
+  local filtered='[]' n i evt labels
+  n="$(echo "$raw" | jq 'length')"
+  i=0
+  while [ "$i" -lt "$n" ]; do
+    evt="$(echo "$raw" | jq -c ".[$i]")"
+    labels="$(echo "$evt" | jq -c '.context.labels')"
+    if role_wakes_for_pr "$ROLE" "$labels"; then
+      filtered="$(jq -c -n --argjson acc "$filtered" --argjson e "$evt" '$acc + [$e]')"
+    fi
+    i=$((i+1))
+  done
+  echo "$filtered"
 }
 
 # Orchestrator has a wider lens: all label changes on any issue/PR.
@@ -456,14 +561,14 @@ poll_once() {
   # Bump last_seen
   "$STATE_HELPER" set "$ROLE" last_seen_utc "$now"
 
-  # v3: bump pr_merged_last_seen_utc to the freshest mergedAt seen this poll.
-  # If pr_merged was empty, leave the mark in place so the next poll keeps the
-  # same window open (handles "merged after we queried, before we wrote mark").
+  # v3.1 (ADR-0008): bump pr_merged_last_seen_utc to the newest merged_at SEEN
+  # by this poll — PR_MERGED_NEWEST_SEEN reflects the unfiltered query result, so
+  # the HWM advances even when label rules filtered every PR out for this role.
+  # Without this, architect/tester would re-query the same backfill window every
+  # poll forever, relying on dedup to suppress duplicates (wasteful, fragile).
   if role_receives_pr_merged "$ROLE"; then
-    local newest_merge_at
-    newest_merge_at="$(echo "$pr_merged" | jq -r '[.[].context.merged_at] | max // empty')"
-    if [ -n "$newest_merge_at" ] && [ "$newest_merge_at" != "null" ]; then
-      "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$newest_merge_at"
+    if [ -n "$PR_MERGED_NEWEST_SEEN" ] && [ "$PR_MERGED_NEWEST_SEEN" != "null" ]; then
+      "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$PR_MERGED_NEWEST_SEEN"
     fi
   fi
 

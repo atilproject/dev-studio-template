@@ -11,6 +11,7 @@
 #   agent-doctor.sh <role> --restart         # restart watcher (ADR-0006: systemd if available)
 #   agent-doctor.sh --units                  # systemd watcher unit status table
 #   agent-doctor.sh --alert                  # cron-friendly: stale roles → Telegram warn, exit code
+#   agent-doctor.sh --fanout <PR_NUM>        # ADR-0008: which roles wake for this merged PR?
 #
 # Examples:
 #   ./agent-doctor.sh                        # quick health board
@@ -19,6 +20,7 @@
 #   ./agent-doctor.sh tester --restart       # cycle a stuck watcher
 #   ./agent-doctor.sh --units                # one-glance unit health
 #   ./agent-doctor.sh --alert                # in cron: */5 * * * *
+#   ./agent-doctor.sh --fanout 42            # simulate label-conditional fanout for PR #42
 #
 # Exit codes:
 #   0  — all roles fresh (or single role healthy)
@@ -263,6 +265,136 @@ units_mode() {
   echo "       journalctl --user -u dev-studio-watcher@<role>  — systemd logs"
 }
 
+# --- fanout mode (ADR-0008): simulate label-conditional pr_merged fanout ---
+# Given a PR number, fetch its labels and show — for each of the 5 roles —
+# whether that role would wake on the merged event under the current
+# PR_MERGED_FANOUT_DEFAULT / PR_MERGED_FANOUT_RULES_ENABLED config.
+#
+# Sources the same helper functions from agent-watch.sh, so the answer here is
+# byte-for-byte the decision the watcher will make at poll time.
+fanout_mode() {
+  local pr_num="${1:-}"
+  if [ -z "$pr_num" ] || ! [[ "$pr_num" =~ ^[0-9]+$ ]]; then
+    echo "ERROR: --fanout requires a numeric PR number (e.g. --fanout 42)" >&2
+    exit 2
+  fi
+  if [ -z "$REPO" ]; then
+    echo "ERROR: cannot determine repo (set GITHUB_REPO or run inside a gh-authenticated checkout)" >&2
+    exit 2
+  fi
+
+  # Pull config + helpers from the watcher we ship alongside this doctor.
+  # We only need the env defaults and the four role_* helper functions; sourcing
+  # is gated to the helper block so we don't run the watcher's main loop.
+  #
+  # The helpers live in lines starting with the "v3.1 (ADR-0008)" marker; rather
+  # than parse, we re-declare the defaults + functions here so doctor stays
+  # standalone if agent-watch.sh ever moves. Behaviour MUST match the watcher
+  # exactly (unit-tested at /tmp/d211-fanout-test.sh).
+  PR_MERGED_FANOUT_DEFAULT="${PR_MERGED_FANOUT_DEFAULT:-orchestrator product-manager developer}"
+  PR_MERGED_FANOUT_RULES_ENABLED="${PR_MERGED_FANOUT_RULES_ENABLED:-true}"
+
+  role_in_default_fanout() {
+    local r="$1"
+    case " $PR_MERGED_FANOUT_DEFAULT " in
+      *" $r "*) return 0 ;;
+      *) return 1 ;;
+    esac
+  }
+  role_eligible_via_label_rules() {
+    [ "$PR_MERGED_FANOUT_RULES_ENABLED" = "true" ] || return 1
+    case "$1" in
+      architect|tester) return 0 ;;
+      *) return 1 ;;
+    esac
+  }
+  role_wakes_for_pr() {
+    local r="$1" labels_json="$2"
+    if role_in_default_fanout "$r"; then return 0; fi
+    [ "$PR_MERGED_FANOUT_RULES_ENABLED" = "true" ] || return 1
+    case "$r" in
+      architect)
+        echo "$labels_json" | jq -e 'any(.[]?; . == "needs-architect-review" or . == "agent:architect")' >/dev/null 2>&1 && return 0
+        ;;
+      tester)
+        echo "$labels_json" | jq -e 'any(.[]?; . == "needs-tester-signoff" or . == "agent:tester")' >/dev/null 2>&1 && return 0
+        ;;
+    esac
+    return 1
+  }
+
+  # Fetch PR metadata
+  local pr_json
+  pr_json="$(gh pr view "$pr_num" --repo "$REPO" \
+    --json number,title,state,merged,mergedAt,headRefOid,labels 2>/dev/null || true)"
+  if [ -z "$pr_json" ] || [ "$pr_json" = "null" ]; then
+    echo "ERROR: PR #${pr_num} not found in ${REPO}" >&2
+    exit 2
+  fi
+
+  local title state merged merged_at sha labels_json
+  title="$(echo "$pr_json"      | jq -r '.title')"
+  state="$(echo "$pr_json"      | jq -r '.state')"
+  merged="$(echo "$pr_json"     | jq -r '.merged')"
+  merged_at="$(echo "$pr_json"  | jq -r '.mergedAt // "-"')"
+  sha="$(echo "$pr_json"        | jq -r '.headRefOid[:7]')"
+  labels_json="$(echo "$pr_json" | jq -c '[.labels[].name]')"
+
+  printf "${B}agent-doctor --fanout (ADR-0008 label-conditional pr_merged)${D}\n\n"
+  printf "  PR #%s  sha=%s  state=%s  merged=%s\n" "$pr_num" "$sha" "$state" "$merged"
+  printf "  Title:    %s\n" "$title"
+  printf "  MergedAt: %s\n" "$merged_at"
+  printf "  Labels:   %s\n\n" "$(echo "$labels_json" | jq -r 'if length == 0 then "(none)" else join(", ") end')"
+
+  printf "  ${B}Config${D}\n"
+  printf "    PR_MERGED_FANOUT_DEFAULT         = %s\n" "$(echo -n "$PR_MERGED_FANOUT_DEFAULT" | sed 's/^$/(empty — default fanout disabled)/')"
+  printf "    PR_MERGED_FANOUT_RULES_ENABLED   = %s\n\n" "$PR_MERGED_FANOUT_RULES_ENABLED"
+
+  printf "  ${B}Fanout decision${D}\n"
+  printf "    %-16s %-6s %s\n" "ROLE" "WAKES" "REASON"
+  local any_wakes=0
+  for role in "${ROLES[@]}"; do
+    local wakes reason
+    if role_in_default_fanout "$role"; then
+      wakes="yes"; reason="in PR_MERGED_FANOUT_DEFAULT"
+    elif role_wakes_for_pr "$role" "$labels_json"; then
+      wakes="yes"
+      case "$role" in
+        architect) reason="label rule: needs-architect-review or agent:architect" ;;
+        tester)    reason="label rule: needs-tester-signoff or agent:tester" ;;
+        *)         reason="label rule matched" ;;
+      esac
+    else
+      wakes="no"
+      if [ "$PR_MERGED_FANOUT_RULES_ENABLED" != "true" ]; then
+        case "$role" in
+          architect|tester) reason="rules disabled (PR_MERGED_FANOUT_RULES_ENABLED=false)" ;;
+          *)                reason="not in default fanout" ;;
+        esac
+      else
+        case "$role" in
+          architect) reason="no needs-architect-review / agent:architect label" ;;
+          tester)    reason="no needs-tester-signoff / agent:tester label" ;;
+          *)         reason="not in default fanout" ;;
+        esac
+      fi
+    fi
+    local colour="$R"; [ "$wakes" = "yes" ] && colour="$G" && any_wakes=1
+    printf "    %-16s ${colour}%-6s${D} %s\n" "$role" "$wakes" "$reason"
+  done
+  echo ""
+
+  if [ "$any_wakes" -eq 0 ]; then
+    printf "  ${Y}⚠ no role would wake for this PR${D} — pr_merged event will be skipped entirely.\n"
+    printf "     (default-fanout is empty AND no label rules matched)\n\n"
+  fi
+
+  printf "  ${B}Override examples${D}\n"
+  printf "    PR_MERGED_FANOUT_DEFAULT=\"\" %s --fanout %s            # rules-only mode\n" "$0" "$pr_num"
+  printf "    PR_MERGED_FANOUT_RULES_ENABLED=false %s --fanout %s    # D2 behaviour (no labels)\n" "$0" "$pr_num"
+  echo ""
+}
+
 # --- main dispatch ---
 if [ "${1:-}" = "--alert" ]; then
   alert_mode
@@ -270,6 +402,11 @@ fi
 
 if [ "${1:-}" = "--units" ]; then
   units_mode
+  exit 0
+fi
+
+if [ "${1:-}" = "--fanout" ]; then
+  fanout_mode "${2:-}"
   exit 0
 fi
 
@@ -282,6 +419,7 @@ if [ $# -eq 0 ]; then
   echo ""
   echo "  Tip: ./agent-doctor.sh <role>             — deep dive"
   echo "       ./agent-doctor.sh <role> --kick PAT  — surgical unblock"
+  echo "       ./agent-doctor.sh --fanout <PR_NUM>  — ADR-0008 fanout simulator"
   exit $any_stale
 fi
 

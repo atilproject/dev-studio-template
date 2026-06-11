@@ -1,6 +1,6 @@
 # ADR-0005: Post-Merge Lifecycle Events (`pr_merged`)
 
-- Status: Accepted
+- Status: Accepted — fanout policy superseded by [ADR-0008](./ADR-0008-label-conditional-fanout.md) (D2.1.1, 2026-06-11). The `pr_merged` event itself remains as defined here; only the "wake all five roles unconditionally" rule is replaced. See ADR-0008 §1 Context for rationale.
 - Date: 2026-06-11
 - Deciders: orchestrator + human operator
 - Supersedes: extends ADR-0003 (Event Model v2)
