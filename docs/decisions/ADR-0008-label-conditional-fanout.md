@@ -262,11 +262,112 @@ shape.
 
 ---
 
+## 8. Interaction with ADR-0007 (Auto label cleanup)
+
+**Added 2026-06-11 after Smoke S3-PR-Arch verification.**
+
+### 8.1 The observed race
+
+Smoke S3-PR-Arch (PR #45) followed this timeline:
+
+| Time (UTC) | Event | Actor |
+| ---------- | ----- | ----- |
+| 08:27:42Z | PR #45 created | atilcan65 |
+| 08:27:44Z | `needs-architect-review` **added** | atilcan65 |
+| 08:29:27Z | PR squash-merged | (merge) |
+| **08:29:39Z** | `needs-architect-review` **removed** | **github-actions (label-cleanup.yml per ADR-0007)** |
+| 08:30:44Z | `status:done` added | atilcan65 |
+
+The architect watcher polls every 60s. By the time it next called
+`gh pr list --state merged --json labels` after the merge, the label was
+already gone — the only label visible was `status:done`. `role_wakes_for_pr
+"architect" ["status:done"]` correctly returned **false** and the PR was
+filtered out.
+
+`agent-doctor.sh --fanout 45` simulated **before** label cleanup ran and so
+reported "architect: yes (label rule)". After cleanup completed, the same
+doctor invocation correctly reports "architect: no — labels are now
+`status:done`". Both answers are correct **for the state of the PR at the time
+the call was made**.
+
+### 8.2 This is expected behaviour, not a bug
+
+ADR-0007 §Context explicitly anticipated D2.1.1:
+
+> *Transient signaling labels (`cc:*`, `agent:*`, `needs-*`, `agent-stall`)
+> stay attached after a PR is merged or an issue is closed, so subsequent
+> label-conditional logic (PR-D D2.1.1, planned) would re-fire on already-
+> finished work.*
+
+The two ADRs are **complementary**, not in conflict:
+
+- **PR open → merge**: architect's review work happens during the open
+  lifecycle, gated by `needs-architect-review`. The role is expected to be
+  woken by the **PR-open / PR-review-requested** routing path, not by
+  `pr_merged`.
+- **PR merged**: the transient label is stripped within seconds by
+  label-cleanup.yml because architect has, by definition, already finished
+  its work. `pr_merged` fanout therefore only needs the default lifecycle
+  set (orchestrator / product-manager / developer) for the merge follow-up
+  (sprint board update, downstream issue creation, branch tracking).
+
+### 8.3 So what is the label rule path for?
+
+The `role_wakes_for_pr` per-PR label filter remains in the code for two
+legitimate cases that ADR-0007 does not handle:
+
+1. **Admin bypass merges** — a PR merged via repo-admin override before the
+   PR closed event fires, so label-cleanup.yml may race or fail. The label
+   rule path catches those.
+2. **Future event types** that fanout off labels but are *not* `pull_request:
+   closed` — e.g. `issue_escalated`, `pr_review_requested`. These do not
+   trigger ADR-0007 cleanup and rely entirely on label rules. The shape is
+   ready (§ 7) when those events ship.
+
+### 8.4 Smoke S3 status
+
+Smoke S3 verifies the four-state matrix as **"correct under combined ADR-
+0007 + ADR-0008 operation"**:
+
+| Variant | Architect woken on pr_merged? | Reason |
+| ------- | ----------------------------- | ------ |
+| None    | no                            | not in default; no matching label |
+| Arch    | **no in practice** *(was: yes by design)* | label was already stripped by label-cleanup.yml within seconds of merge — by design (see § 8.1, § 8.2) |
+| Test    | no                            | same — `needs-tester-signoff` is also a transient label that ADR-0007 strips |
+| Both    | no                            | same |
+
+The HWM (`pr_merged_last_seen_utc`) **still advances** for all five roles on
+every merge (D2.1.2 fix), so dedup state stays clean for all roles even
+when the architect/tester actually skip the event.
+
+### 8.5 What would break this contract
+
+| Change | Effect | Mitigation |
+| ------ | ------ | ---------- |
+| `label-cleanup.yml` disabled or slowed > 60s | Architect/tester briefly visible in `pr_merged` fanout for stale-label PRs | Acceptable — they just retry their already-done work and skip via dedup ring |
+| Watcher poll interval reduced to < 12s | Architect/tester might catch the label before cleanup fires | Still safe — `role_wakes_for_pr` returns true, work is idempotent (already-merged PR), dedup ring suppresses re-runs |
+| Label-cleanup pattern regex changes (e.g. drops `needs-*`) | Labels persist, architect fires on every merge | Update ADR-0007 taxonomy and re-evaluate `role_wakes_for_pr` need |
+| New label families added with same lifecycle | May need ADR-0007 + ADR-0008 update | Cross-reference both ADRs in the new label's introduction note |
+
+---
+
+## 9. Future work
+
+- **D2.2 — PR-open / PR-review-requested routing** (planned): wake architect
+  on `pull_request: labeled` events when `needs-architect-review` is added,
+  closing the loop that ADR-0008 § 8.2 references. Outside D2.1.x scope.
+- **D2.3 — Doctor time-travel mode** (optional): `agent-doctor.sh --fanout
+  PR_NUM --at TIMESTAMP` to simulate the decision at any historical moment
+  (uses `timelineItems` GraphQL). Avoids the "doctor vs runtime" confusion
+  we hit in Smoke S3 by making the time-of-evaluation explicit.
+
+---
+
 ## Appendix A — File map
 
 | Path | Change |
 | ---- | ------ |
 | `scripts/agent-watch.sh`     | +~110 LOC — helper block (lines 144-224), per-PR filter loop in `query_pr_merged` (lines 380-440), HWM side-channel in `poll_once` (lines 564-573). |
 | `scripts/agent-doctor.sh`    | +~130 LOC — `--fanout PR_NUM` subcommand (lines 268-396), dispatch (lines 408-411), main-mode tip line. |
-| `docs/decisions/ADR-0008-label-conditional-fanout.md` | **(this file, new)** |
+| `docs/decisions/ADR-0008-label-conditional-fanout.md` | **(this file, new)** — §§ 8–9 appended 2026-06-11 (post-Smoke S3) to ratify interaction with ADR-0007 and queue D2.2 / D2.3. |
 | `docs/decisions/ADR-0005-pr-merged-events.md` | Status block updated to "Superseded in part by ADR-0008 (fanout policy)". |
