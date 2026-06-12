@@ -14,7 +14,9 @@ body:
     id: user_story
     attributes:
       label: User Story
-      description: "As a [user], I want [feature] so that [benefit]" formatında yaz. Format şart değil ama net olsun.
+      description: |
+        "As a [user], I want [feature] so that [benefit]" formatında yaz.
+        Format şart değil ama net olsun.
       placeholder: "As a developer, I want auto-deployment so that I can release without manual SSH"
     validations:
       required: true
