@@ -17,9 +17,12 @@
 # Targeting strategy
 # ------------------
 # Panes are located by their `pane_title`, which each agent sets in its
-# own bootstrap script via `tmux select-pane -T "<ROLE_UPPER>"`. Title
-# survives pane-index reassignment caused by layout changes, kills, or
-# splits — so this script is robust against the user rearranging panes.
+# own bootstrap script via `tmux select-pane -T <role>`. Title survives
+# pane-index reassignment caused by layout changes, kills, or splits —
+# so this script is robust against the user rearranging panes.
+#
+# Match is case-insensitive (the launcher / claude binary / tmux version
+# may render the title in any case).
 #
 # Does NOT:
 #   - Clear conversation history (use full restart in scripts/dev-studio-start.sh).
@@ -74,8 +77,6 @@ if [ "$valid" = "0" ]; then
   usage
 fi
 
-ROLE_UPPER="$(echo "$ROLE" | tr '[:lower:]' '[:upper:]')"
-
 # Resolve role-doc path (try common locations).
 ROLE_DOC=""
 for candidate in \
@@ -110,15 +111,21 @@ if ! tmux list-windows -t "$TMUX_SESSION" -F '#W' | grep -qx "$TMUX_WINDOW"; the
   exit 2
 fi
 
-# Find the pane whose pane_title equals ROLE_UPPER.
+# Find the pane whose pane_title matches ROLE (case-insensitive).
 # Format: "<pane_index>:<pane_title>" per line.
+#
+# We match case-insensitively because the launcher's title-setting flow
+# (tmux select-pane -T) may render the title in either case depending
+# on tmux version, claude-binary post-processing, or pane-border format.
+# Matching on `${ROLE}` (lowercase) with -i covers all observed shapes:
+# `developer`, `Developer`, `DEVELOPER`, etc.
 PANE_LINE="$(
   tmux list-panes -t "${TMUX_SESSION}:${TMUX_WINDOW}" -F '#{pane_index}:#{pane_title}' \
-    | grep -E ":${ROLE_UPPER}\$" || true
+    | grep -iE ":${ROLE}\$" || true
 )"
 
 if [ -z "$PANE_LINE" ]; then
-  echo "ERROR: no pane with title '${ROLE_UPPER}' in ${TMUX_SESSION}:${TMUX_WINDOW}."
+  echo "ERROR: no pane with title matching '${ROLE}' (case-insensitive) in ${TMUX_SESSION}:${TMUX_WINDOW}."
   echo "  Available panes (index:title):"
   tmux list-panes -t "${TMUX_SESSION}:${TMUX_WINDOW}" -F '    #{pane_index}:#{pane_title}'
   echo ""
@@ -158,7 +165,7 @@ tmux delete-buffer -b "$BUFFER_NAME"
 # Submit the message to the agent's chat input.
 tmux send-keys -t "$TARGET" Enter
 
-echo "✓ Sent re-prime to ${TARGET} (role: ${ROLE}, title: ${ROLE_UPPER})"
+echo "✓ Sent re-prime to ${TARGET} (role: ${ROLE}, matched title: ${PANE_LINE#*:})"
 echo "  Role doc: ${ROLE_DOC}"
 echo "  Watch the pane for: [REPRIME ACK] ${ROLE}: ..."
 echo "  If no ack within one polling cycle, see docs/CONTEXT-HYGIENE.md § 4.2."
