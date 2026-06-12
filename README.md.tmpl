@@ -1,0 +1,72 @@
+# {{GITHUB_REPO}}
+
+Multi-agent development studio powered by Claude Code with GitHub Scrum workflow.
+
+> Generated from [`atilcan65/dev-studio-template`](https://github.com/atilcan65/dev-studio-template). Owner: **{{HUMAN_OWNER_NAME}}** (@{{GITHUB_OWNER}}).
+
+## Architecture
+
+- **5 Claude Code agents** (Orchestrator, PM, Architect, Developer, Tester)
+- **GitHub Projects v2** as the Scrum board
+- **systemd timer** for health checks (30 min cadence)
+- **Telegram webhook** for cross-agent notifications
+
+See [`.claude/CLAUDE.md`](.claude/CLAUDE.md) for the full project context, file-ownership matrix, and process conventions.
+
+## Repository Structure
+
+```
+.
+├── .claude/                 # Agent definitions, project memory (human-only)
+│   ├── agents/              # Subagent soul files
+│   ├── commands/            # Slash commands
+│   └── CLAUDE.md            # Project-wide context (rendered from .tmpl)
+├── .github/                 # Issue/PR templates, CI workflows (human-only)
+│   ├── ISSUE_TEMPLATE/
+│   └── workflows/
+├── docs/                    # Product, backlog, designs, decisions, sprints
+│   ├── backlog/             # User stories per sprint
+│   ├── designs/             # Per-story design docs
+│   ├── decisions/           # Architecture Decision Records (ADRs)
+│   ├── product/             # Vision, roadmap, personas
+│   └── sprints/             # Sprint plans and standups
+├── scripts/                 # dev-studio-init.sh, notify.sh, agent-watch.sh, ...
+└── systemd/                 # systemd service & timer units (rendered from .tmpl)
+```
+
+## First run — bootstrap a fresh project
+
+When this repo is created from the template (via "Use this template" or
+`gh repo create --template atilcan65/dev-studio-template`), do this once:
+
+```bash
+# 1. clone & enter
+git clone https://github.com/{{GITHUB_OWNER}}/{{GITHUB_REPO}}.git
+cd {{GITHUB_REPO}}
+
+# 2. render all .tmpl files with values pulled from `gh` and `git`
+bash scripts/dev-studio-init.sh
+
+# 3. start the multi-agent watcher
+bash scripts/dev-studio-start.sh start
+
+# 4. open the first issue with label `agent:product-manager` so PM
+#    runs the vision-intake flow (see .claude/CLAUDE.md §Product)
+gh issue create \
+  --title "Project kickoff — vision intake" \
+  --label "agent:product-manager"
+```
+
+The init script is idempotent — re-running it always produces a clean
+render from the latest `.tmpl` files. Edits made to rendered outputs
+(e.g. this `README.md`, `.claude/CLAUDE.md`) will be overwritten; edit
+the corresponding `*.tmpl` instead.
+
+## Tech stack
+
+<FILL IN once Architect lands the first ADR. Then keep this section
+in sync with `docs/decisions/`.>
+
+## License
+
+Private — internal use only.

@@ -3,15 +3,16 @@
 > Read this file at the start of every session. It is the single source of truth for product, team, and process context.
 
 ## Product
-- **Name**: atilprojects
-- **Vision**: <one paragraph from `docs/product/vision.md`>
+- **Name**: {{GITHUB_REPO}}
+- **Vision**: <one paragraph from `docs/product/vision.md` — Product Manager fills this on first run via the `agent:product-manager` kickoff issue>
 - **Current sprint**: see `docs/sprints/current/plan.md`
 - **Source of truth for backlog**: GitHub Project board (Projects v2)
+- **Repository**: https://github.com/{{GITHUB_OWNER}}/{{GITHUB_REPO}}
 
 ## Team (5 agents + 1 human)
 | Role | Who | Soul file |
 |---|---|---|
-| Human owner | atil can | — |
+| Human owner | {{HUMAN_OWNER_NAME}} (@{{GITHUB_OWNER}}) | — |
 | Orchestrator | Claude Code / MiniMax-M3 | `.claude/agents/orchestrator.md` |
 | Product Manager | Claude Code / MiniMax-M3 | `.claude/agents/product-manager.md` |
 | Architect | Claude Code / MiniMax-M3 | `.claude/agents/architect.md` |
@@ -44,7 +45,7 @@ A story is "Done" only if ALL of these hold:
 - **Issues**: use templates in `.github/ISSUE_TEMPLATE/`.
 - **PR comments**: structured (see developer.md and tester.md).
 - **Cross-agent**: never DM-style. Always via GitHub Issue or PR comment.
-- **Escalation to human**: Telegram (`scripts/notify.sh -l human`) + GitHub `@`-mention to @atilcan65.
+- **Escalation to human**: Telegram (`scripts/notify.sh -l human`) + GitHub `@`-mention to @{{GITHUB_OWNER}}.
 
 ## Auto-Ping Hard-Rule (Cross-Agent Communication)
 
@@ -68,7 +69,7 @@ A story is "Done" only if ALL of these hold:
 Örnek:
 ```
 scripts/notify.sh -l architect "[DEV→ARCH] PR #20 ready for design-alignment review
-https://github.com/atilcan65/atilprojects/pull/20
+https://github.com/{{GITHUB_OWNER}}/{{GITHUB_REPO}}/pull/20
 Check: import path, bind string, sync handler"
 ```
 

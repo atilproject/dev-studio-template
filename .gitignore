@@ -75,3 +75,7 @@ scripts/install/systemd/dev-studio-watcher@.service
 scripts/install/systemd/dev-studio-watcher-reload.service
 scripts/install/systemd/dev-studio-watcher-reload.path
 systemd/dev-studio-health.service
+# --- Faz 4: BÖL dosyaları rendered outputs (idempotent, edit the .tmpl instead) ---
+README.md
+.claude/CLAUDE.md
+docs/decisions/INDEX.md
