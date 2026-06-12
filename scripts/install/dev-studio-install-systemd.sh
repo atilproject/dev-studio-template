@@ -19,7 +19,8 @@
 
 set -euo pipefail
 
-REPO_ROOT="${REPO_ROOT:-/opt/dev-studio/atilprojects}"
+# Auto-detect repo root from script location, allow override via env
+REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)}"
 ROLES=(orchestrator product-manager architect developer tester)
 SYSTEMD_USER_DIR="$HOME/.config/systemd/user"
 SRC_UNITS="$REPO_ROOT/scripts/install/systemd"
@@ -40,6 +41,14 @@ fail() { printf '%s[install]%s %s%s%s\n' "$C_BOLD" "$C_RESET" "$C_RED" "$*" "$C_
 log "preflight checks"
 [ -d "$REPO_ROOT" ] || fail "REPO_ROOT not found: $REPO_ROOT"
 [ -d "$SRC_UNITS" ] || fail "unit source dir not found: $SRC_UNITS"
+
+# Detect un-rendered template state and guide the user toward dev-studio-init.sh
+# (templates are committed with .tmpl extension; init script renders them).
+if [ -f "$SRC_UNITS/dev-studio-watcher@.service.tmpl" ] && \
+   [ ! -f "$SRC_UNITS/dev-studio-watcher@.service" ]; then
+  fail "systemd units not rendered yet. Run: bash $REPO_ROOT/scripts/dev-studio-init.sh first."
+fi
+
 [ -f "$SRC_UNITS/dev-studio-watcher@.service" ] || fail "unit template missing"
 [ -f "$SRC_UNITS/dev-studio-watcher-reload.path" ] || fail "reload .path missing"
 [ -f "$SRC_UNITS/dev-studio-watcher-reload.service" ] || fail "reload .service missing"

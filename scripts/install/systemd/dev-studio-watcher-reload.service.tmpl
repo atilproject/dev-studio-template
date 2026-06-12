@@ -1,6 +1,6 @@
 [Unit]
 Description=Restart all dev-studio watchers when agent-watch.sh changes
-Documentation=https://github.com/atilcan65/atilprojects/blob/main/docs/decisions/ADR-0006-watcher-resilience.md
+Documentation=https://github.com/{{GITHUB_OWNER}}/{{GITHUB_REPO}}/blob/main/docs/decisions/ADR-0006-watcher-resilience.md
 # Debounce: a git pull may touch the file briefly twice; cap reload churn
 StartLimitIntervalSec=30
 StartLimitBurst=2

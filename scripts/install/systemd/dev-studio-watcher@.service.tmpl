@@ -1,14 +1,14 @@
 [Unit]
 Description=Multi-Agent Dev Studio watcher for role %i
-Documentation=https://github.com/atilcan65/atilprojects/blob/main/docs/decisions/ADR-0006-watcher-resilience.md
+Documentation=https://github.com/{{GITHUB_OWNER}}/{{GITHUB_REPO}}/blob/main/docs/decisions/ADR-0006-watcher-resilience.md
 After=network-online.target
 Wants=network-online.target
 
 [Service]
 Type=simple
-WorkingDirectory=/opt/dev-studio/atilprojects
+WorkingDirectory={{REPO_ROOT}}
 # %i = role name (orchestrator, product-manager, architect, developer, tester)
-ExecStart=/usr/bin/bash /opt/dev-studio/atilprojects/scripts/agent-watch.sh %i --loop
+ExecStart=/usr/bin/bash {{REPO_ROOT}}/scripts/agent-watch.sh %i --loop
 Restart=always
 RestartSec=5
 # Avoid restart storms if agent-watch.sh itself is broken

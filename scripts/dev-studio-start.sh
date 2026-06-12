@@ -22,8 +22,10 @@
 set -euo pipefail
 
 SESSION="dev-studio"
-REPO_ROOT="/opt/dev-studio/atilprojects"
-HEARTBEAT_DIR="/var/log/dev-studio"
+# Auto-detect repo root from script location, allow override via env
+# (kept overridable for tests / CI / non-standard layouts)
+REPO_ROOT="${DEV_STUDIO_REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
+HEARTBEAT_DIR="${DEV_STUDIO_HEARTBEAT_DIR:-/var/log/dev-studio}"
 ENV_FILE="$HOME/.dev-studio-env"
 BOOT_DIR="$REPO_ROOT/scripts/.tmux-bootstrap"
 

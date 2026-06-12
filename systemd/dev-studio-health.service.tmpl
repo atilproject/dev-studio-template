@@ -7,9 +7,9 @@ Wants=network-online.target
 Type=oneshot
 User=atilcan
 Group=atilcan
-WorkingDirectory=/opt/dev-studio/atilprojects
+WorkingDirectory={{REPO_ROOT}}
 EnvironmentFile=/home/atilcan/.dev-studio-env
-ExecStart=/opt/dev-studio/atilprojects/scripts/health-check.sh
+ExecStart={{REPO_ROOT}}/scripts/health-check.sh
 StandardOutput=journal
 StandardError=journal
 # Don't restart on failure — timer handles cadence

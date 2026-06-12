@@ -223,7 +223,7 @@ alert_mode() {
   fi
 
   local msg="🩺 agent-doctor: ${#stale_roles[@]} role(s) stale (no heartbeat >${STALE_SEC}s): ${stale_roles[*]}
-Run on VM:  /opt/dev-studio/atilprojects/scripts/agent-doctor.sh ${stale_roles[0]}"
+Run on VM:  ${SCRIPT_DIR}/agent-doctor.sh ${stale_roles[0]}"
 
   if [ -x "$NOTIFY" ]; then
     "$NOTIFY" -l warn "$msg" >/dev/null 2>&1 || true
