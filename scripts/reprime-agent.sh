@@ -16,13 +16,25 @@
 #
 # Targeting strategy
 # ------------------
-# Panes are located by their `pane_title`, which each agent sets in its
-# own bootstrap script via `tmux select-pane -T <role>`. Title survives
-# pane-index reassignment caused by layout changes, kills, or splits —
-# so this script is robust against the user rearranging panes.
+# We address panes by their **deterministic pane index** in the tmux
+# session, as defined by scripts/dev-studio-start.sh:
 #
-# Match is case-insensitive (the launcher / claude binary / tmux version
-# may render the title in any case).
+#     pane 0 = orchestrator
+#     pane 1 = product-manager
+#     pane 2 = architect
+#     pane 3 = developer
+#     pane 4 = tester
+#     pane 5 = human  (not a re-prime target)
+#
+# Why not pane_title?
+#   - Tried it. Claude Code overlays activity indicators (e.g. "*developer",
+#     "· orchestrator") on top of the title set by `tmux select-pane -T`,
+#     making title-based matching unreliable in practice.
+#   - The launcher creates panes in a fixed split order — index is
+#     deterministic and survives layout changes (we never reorder).
+#
+# If the launcher's layout ever changes, update both this map AND
+# scripts/dev-studio-start.sh together. Keep them in lockstep.
 #
 # Does NOT:
 #   - Clear conversation history (use full restart in scripts/dev-studio-start.sh).
@@ -52,6 +64,15 @@ set -euo pipefail
 TMUX_SESSION="${TMUX_SESSION:-dev-studio}"
 TMUX_WINDOW="${TMUX_WINDOW:-main}"
 
+# Role → pane index map. MUST match scripts/dev-studio-start.sh layout.
+declare -A ROLE_PANE=(
+  [orchestrator]=0
+  [product-manager]=1
+  [architect]=2
+  [developer]=3
+  [tester]=4
+)
+
 VALID_ROLES=(orchestrator product-manager architect developer tester)
 
 usage() {
@@ -68,14 +89,12 @@ usage() {
 ROLE="$1"
 
 # Validate role.
-valid=0
-for r in "${VALID_ROLES[@]}"; do
-  [ "$r" = "$ROLE" ] && valid=1 && break
-done
-if [ "$valid" = "0" ]; then
+if [ -z "${ROLE_PANE[$ROLE]+x}" ]; then
   echo "ERROR: invalid role '$ROLE'"
   usage
 fi
+PANE_IDX="${ROLE_PANE[$ROLE]}"
+TARGET="${TMUX_SESSION}:${TMUX_WINDOW}.${PANE_IDX}"
 
 # Resolve role-doc path (try common locations).
 ROLE_DOC=""
@@ -111,32 +130,18 @@ if ! tmux list-windows -t "$TMUX_SESSION" -F '#W' | grep -qx "$TMUX_WINDOW"; the
   exit 2
 fi
 
-# Find the pane whose pane_title matches ROLE (case-insensitive).
-# Format: "<pane_index>:<pane_title>" per line.
-#
-# We match case-insensitively because the launcher's title-setting flow
-# (tmux select-pane -T) may render the title in either case depending
-# on tmux version, claude-binary post-processing, or pane-border format.
-# Matching on `${ROLE}` (lowercase) with -i covers all observed shapes:
-# `developer`, `Developer`, `DEVELOPER`, etc.
-PANE_LINE="$(
-  tmux list-panes -t "${TMUX_SESSION}:${TMUX_WINDOW}" -F '#{pane_index}:#{pane_title}' \
-    | grep -iE ":${ROLE}\$" || true
-)"
-
-if [ -z "$PANE_LINE" ]; then
-  echo "ERROR: no pane with title matching '${ROLE}' (case-insensitive) in ${TMUX_SESSION}:${TMUX_WINDOW}."
-  echo "  Available panes (index:title):"
-  tmux list-panes -t "${TMUX_SESSION}:${TMUX_WINDOW}" -F '    #{pane_index}:#{pane_title}'
+# Validate target pane exists at the expected index.
+if ! tmux list-panes -t "${TMUX_SESSION}:${TMUX_WINDOW}" -F '#P' | grep -qx "$PANE_IDX"; then
+  echo "ERROR: pane index ${PANE_IDX} (expected for role '${ROLE}') not found in ${TMUX_SESSION}:${TMUX_WINDOW}."
+  echo "  Available panes (index : title) — for diagnostics only, not used for targeting:"
+  tmux list-panes -t "${TMUX_SESSION}:${TMUX_WINDOW}" -F '    #{pane_index} : #{pane_title}'
   echo ""
-  echo "  Tip: each agent bootstrap sets its own title with"
-  echo "       'tmux select-pane -T <ROLE>'. If the title is missing,"
-  echo "       the bootstrap may not have run — try full restart."
+  echo "  Tip: the launcher creates panes 0..5 in a fixed order. If pane"
+  echo "       ${PANE_IDX} is missing, the launcher's layout has changed"
+  echo "       or panes have been killed individually. Run a full restart:"
+  echo "       scripts/dev-studio-start.sh stop && scripts/dev-studio-start.sh start"
   exit 2
 fi
-
-PANE_IDX="${PANE_LINE%%:*}"
-TARGET="${TMUX_SESSION}:${TMUX_WINDOW}.${PANE_IDX}"
 
 # Build the re-prime message. The [REPRIME] prefix is the trigger the
 # role doc REPRIME Protocol section reacts to.
@@ -165,7 +170,7 @@ tmux delete-buffer -b "$BUFFER_NAME"
 # Submit the message to the agent's chat input.
 tmux send-keys -t "$TARGET" Enter
 
-echo "✓ Sent re-prime to ${TARGET} (role: ${ROLE}, matched title: ${PANE_LINE#*:})"
+echo "✓ Sent re-prime to ${TARGET} (role: ${ROLE}, pane index: ${PANE_IDX})"
 echo "  Role doc: ${ROLE_DOC}"
 echo "  Watch the pane for: [REPRIME ACK] ${ROLE}: ..."
 echo "  If no ack within one polling cycle, see docs/CONTEXT-HYGIENE.md § 4.2."
