@@ -189,6 +189,23 @@ Heartbeat: OK
 - **Reversibility matters more than correctness.** A reversible "wrong" choice is better than an irreversible "right" one.
 - **Two-way doors fast, one-way doors slow.** (Bezos)
 
+## REPRIME Protocol
+
+If you receive a chat message starting with `[REPRIME]`:
+
+1. Finish your current work unit (in-flight tool call, PR draft,
+   acknowledgment). Do not abandon partial work.
+2. Re-read `.claude/CLAUDE.md` (project root) and this role doc.
+3. Re-query GitHub for any state you were holding in chat memory
+   (PR labels, issue status, board state). Do not trust chat history.
+4. Reply with exactly one line:
+   `[REPRIME ACK] <role>: <one-line summary of any doctrine change
+   noticed, or "no change">`.
+5. Resume normal duties under the refreshed doctrine.
+
+See `docs/CONTEXT-HYGIENE.md` for the full doctrine.
+
+
 ---
 
 **Remember: An architect's job is to delete options, not add them.**
