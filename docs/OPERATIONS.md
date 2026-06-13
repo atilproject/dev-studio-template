@@ -129,17 +129,19 @@ gh issue edit 7 --add-label "sprint:current"
 
 `agent-watch.sh` otomatik route ediyor. Sen sadece bekle ve PR'lara review yap.
 
-İlerlemeyi görmek için:
+İlerlemeyi görmek için (açık issue'ları ve PR'ları sayar):
 ```bash
-./scripts/agent-state.sh sprint-status
+./scripts/agent-doctor.sh                       # tüm rol heartbeat'leri + dedup sayısı
+gh issue list --state open --label "sprint:current"   # current sprint işleri
+gh pr list --state open                              # bekleyen PR'lar
 ```
 
-**Beklenen output:**
+**Beklenen output (agent-doctor):**
 ```
-Sprint: current (3 issues)
-├─ #5 [type:feature] developer: in_progress (2h 15m)
-├─ #6 [type:feature] tester: in_progress (45m)
-└─ #7 [type:feature] backlog (waiting for dependency #5)
+agent-doctor — health check (stale threshold: 300s)
+  product-manager  FRESH (heartbeat 42s ago)   dedup=12
+  developer        FRESH (heartbeat 31s ago)   dedup=18
+  tester           FRESH (heartbeat 55s ago)   dedup=9
 ```
 
 ### 2.3 Sprint kapanışı
@@ -334,20 +336,24 @@ gh pr merge <num> --squash --delete-branch
 | Dosya/Klasör | Önem | Frekans |
 |---|---|---|
 | `~/.dev-studio-env` | Kritik (token'lar) | İlk setup + her değişiklikte |
-| `.state/agent-state.json` | Orta (regenerate edilebilir) | Günlük |
+| `/var/log/dev-studio/agent-state/*.json` | Orta (regenerate edilebilir) | Günlük |
 | `logs/` | Düşük | Haftalık |
 | `docs/decisions/` | Yüksek (ADR'lar git'te ama yedek iyidir) | Git push ile zaten |
 
 ### 6.2 State backup
 
+State dosyaları per-rol JSON şeklinde `$AGENT_STATE_DIR` altında durur
+(default: `/var/log/dev-studio/agent-state/`). Tümünü tek tarball'a al:
+
 ```bash
 mkdir -p backups
-cp .state/agent-state.json backups/agent-state-$(date +%Y%m%d-%H%M).json
+tar czf backups/agent-state-$(date +%Y%m%d-%H%M).tar.gz \
+    -C /var/log/dev-studio agent-state
 ```
 
 Bunu cron'a koy (günlük):
 ```cron
-0 2 * * * cd /home/atilcan/my-project && cp .state/agent-state.json backups/agent-state-$(date +\%Y\%m\%d).json
+0 2 * * * tar czf /home/atilcan/backups/agent-state-$(date +\%Y\%m\%d).tar.gz -C /var/log/dev-studio agent-state
 ```
 
 ### 6.3 Label snapshot (referans için)
@@ -383,11 +389,11 @@ chmod 600 ~/.dev-studio-env
 ### Günlük 5 komut
 
 ```bash
-./scripts/agent-watch.sh status       # genel durum
-./scripts/agent-doctor.sh             # sağlık check
-./scripts/agent-state.sh sprint-status  # sprint progress
-tail -f logs/agent-watch.log          # canlı log
-gh pr list --state open               # bekleyen PR'lar
+./scripts/agent-watch.sh status         # genel durum
+./scripts/agent-doctor.sh               # sağlık check (heartbeat + dedup)
+gh issue list --label "sprint:current"  # sprint progress
+tail -f logs/agent-watch.log            # canlı log
+gh pr list --state open                 # bekleyen PR'lar
 ```
 
 ### Yeni proje (tek seferlik)
@@ -405,12 +411,15 @@ gh issue create --template vision-intake.yml
 ### Sorun çıkınca
 
 ```bash
-./scripts/agent-doctor.sh --verbose   # ilk teşhis
+./scripts/agent-doctor.sh --verbose                # ilk teşhis
 # bulguya göre:
-./scripts/agent-watch.sh restart       # watch servis donduysa
-./scripts/agent-state.sh reset <agent> # agent stuck'sa (son çare)
-./scripts/reprime-agent.sh <agent> <issue>  # context drift varsa
+./scripts/agent-watch.sh restart                   # watch servis donduysa
+./scripts/agent-state.sh kick <role> <pattern>     # dedup wedge'i aç (son çare)
+./scripts/reprime-agent.sh <agent> <issue>         # context drift varsa
 ```
+
+> Not: "reset" yerine `kick` kullanılır — dedup ring'inde bir issue'ya ait
+> kayıtları substring ile sil. Örnek: `./scripts/agent-state.sh kick tester pr-review-26`.
 
 ### Sprint kapanışı
 
