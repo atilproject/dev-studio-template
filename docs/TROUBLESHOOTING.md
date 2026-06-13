@@ -181,14 +181,29 @@ gh label list -R atilcan65/$REPO_NAME | wc -l
    ```
    **Beklenen:** `agent:pm` (iki nokta sonrası boşluk YOK)
 
-4. Agent busy ise state file'a bak:
+4. Agent busy ise per-role state file'a bak (her rolün ayrı dosyası var, `/var/log/dev-studio/agent-state/<role>.json`):
    ```bash
-   cat .state/agent-state.json | jq '.agents.pm'
+   cat /var/log/dev-studio/agent-state/product-manager.json | jq .
    ```
-   **Beklenen (sağlıklı, idle):**
+   Veya `agent-state.sh` ile (env-aware):
+   ```bash
+   ./scripts/agent-state.sh get product-manager
+   ```
+   **Beklenen alanlar (v3 schema):**
    ```json
-   {"status": "idle", "current_issue": null, "last_active": "..."}
+   {
+     "role": "product-manager",
+     "last_seen_utc": "2026-06-13T07:00:00Z",
+     "last_heartbeat_utc": "2026-06-13T07:00:00Z",
+     "processed_event_ids": [],
+     "poll_interval_sec": 60,
+     "burst_until_utc": null,
+     "pr_merged_last_seen_utc": null,
+     "pr_labeled_last_seen_utc": null,
+     "polled_at_utc": "2026-06-13T07:00:00Z"
+   }
    ```
+   `last_heartbeat_utc` çok eskiyse (>5 dk) agent stall'da; sonraki bölüme bak.
 
 ### S2.2 — Agent stall (15 dakikadan fazla "in_progress" ama ilerleme yok)
 
@@ -207,14 +222,20 @@ gh label list -R atilcan65/$REPO_NAME | wc -l
    ```
    Detay için: [docs/CONTEXT-HYGIENE.md](CONTEXT-HYGIENE.md)
 
-3. Zorla idle'a çevir (son çare):
+3. Dedup wedge'i çöz — agent'ın "bu event'i zaten gördüm" diye atladığı durumlarda, `processed_event_ids` listesinden ilgili kaydı düşür (kick):
    ```bash
-   ./scripts/agent-state.sh reset <agent-name>
+   ./scripts/agent-state.sh kick <role> <issue-id-substring>
+   ```
+   **Örnek:**
+   ```bash
+   # PM'in #42 label event'ini tekrar işlemesini sağla
+   ./scripts/agent-state.sh kick product-manager 42
    ```
    **Beklenen output:**
    ```
-   ✓ Agent <name> reset to idle. Previous issue #42 marked agent:human.
+   ✓ Removed 1 event(s) matching '42' from product-manager processed_event_ids
    ```
+   Not: `kick` agent'ı "reset" etmez — sadece dedup hafızasını temizler. Asıl current task'ı durdurmak istiyorsan ilgili Claude Code instance'ını manuel restart et.
 
 ### S2.3 — Agent yanlış issue'yu alıyor
 

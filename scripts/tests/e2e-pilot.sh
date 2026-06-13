@@ -415,6 +415,33 @@ else
 fi
 
 # ============================================================================
+# T7 — state schema smoke (agent-state.sh schema + backward-compat)
+# ============================================================================
+log_section "T7 — State schema smoke"
+
+STATE_SMOKE="scripts/tests/state-schema-smoke.sh"
+if [[ -f "$STATE_SMOKE" ]]; then
+    pass "state-schema-smoke.sh present"
+    if bash -n "$STATE_SMOKE" 2>/tmp/t7-syntax.log; then
+        pass "state-schema-smoke.sh syntax valid"
+    else
+        fail "state-schema-smoke.sh syntax error" "$(cat /tmp/t7-syntax.log)"
+    fi
+
+    # Run the full smoke suite. It isolates its own state dir via mktemp,
+    # so it won't touch /var/log/dev-studio. Exit code: 0 if all sub-tests
+    # passed, 1 if any failed.
+    if bash "$STATE_SMOKE" >/tmp/t7-run.log 2>&1; then
+        SUB_PASS=$(grep -c '✓ PASS' /tmp/t7-run.log || echo 0)
+        pass "state-schema-smoke: all $SUB_PASS sub-tests passed"
+    else
+        fail "state-schema-smoke failed" "$(tail -20 /tmp/t7-run.log)"
+    fi
+else
+    fail "state-schema-smoke.sh not found at $STATE_SMOKE"
+fi
+
+# ============================================================================
 # Summary
 # ============================================================================
 log_section "Summary"

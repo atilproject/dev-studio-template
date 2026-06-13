@@ -9,8 +9,17 @@
 #     "last_heartbeat_utc": "2026-06-10T15:00:00Z",
 #     "processed_event_ids": ["evt-abc", "evt-def"],
 #     "poll_interval_sec": 60,
-#     "burst_until_utc": null
+#     "burst_until_utc": null,
+#     "pr_merged_last_seen_utc": null,    # v3: high-water mark for PR merged events
+#     "pr_labeled_last_seen_utc": null,   # v3: high-water mark for PR labeled events
+#     "polled_at_utc": null               # v3: timestamp of most recent poll (set by watcher each cycle)
 #   }
+#
+# Schema evolution: new optional fields default to null and are backfilled
+# on next `init` call for any pre-existing state file (see cmd_init). This
+# preserves backward compatibility — watchers / doctor scripts that already
+# wrote these fields via `set` continue to work; fresh init now declares them
+# upfront so consumers can rely on key existence.
 #
 # Usage:
 #   agent-state.sh init <role>                   # create file if missing
@@ -84,15 +93,32 @@ cmd_init() {
          last_heartbeat_utc: $now,
          processed_event_ids: [],
          poll_interval_sec: $poll,
-         burst_until_utc: null
+         burst_until_utc: null,
+         pr_merged_last_seen_utc: null,
+         pr_labeled_last_seen_utc: null,
+         polled_at_utc: null
        }' > "$file"
     echo "Initialised state: $file"
   else
-    # Backfill missing fields (last_heartbeat_utc was added in v2)
-    if ! jq -e '.last_heartbeat_utc' "$file" >/dev/null 2>&1; then
-      local now
-      now="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    # Backfill missing fields. Pattern is idempotent: if the field already
+    # exists (even with a non-null value) we don't touch it. This is how
+    # the schema evolves without breaking pre-existing state files.
+    #
+    # v2 → v3 backfill: last_heartbeat_utc, pr_merged_last_seen_utc,
+    # pr_labeled_last_seen_utc, polled_at_utc.
+    local now
+    now="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+    if ! jq -e 'has("last_heartbeat_utc")' "$file" >/dev/null 2>&1; then
       jq_inplace "$file" --arg now "$now" '.last_heartbeat_utc = $now'
+    fi
+    if ! jq -e 'has("pr_merged_last_seen_utc")' "$file" >/dev/null 2>&1; then
+      jq_inplace "$file" '.pr_merged_last_seen_utc = null'
+    fi
+    if ! jq -e 'has("pr_labeled_last_seen_utc")' "$file" >/dev/null 2>&1; then
+      jq_inplace "$file" '.pr_labeled_last_seen_utc = null'
+    fi
+    if ! jq -e 'has("polled_at_utc")' "$file" >/dev/null 2>&1; then
+      jq_inplace "$file" '.polled_at_utc = null'
     fi
     echo "State already exists: $file"
   fi
