@@ -118,7 +118,7 @@ git commit -m "chore: fix executable bits on scripts"
 
 ### S1.4 — Init başarılı ama label'lar yok
 
-**Belirti:** Issue açmaya çalışınca template'lerin önerdiği `agent:pm` label'ı mevcut değil.
+**Belirti:** Issue açmaya çalışınca template'lerin önerdiği `agent:product-manager` label'ı mevcut değil.
 
 **Sebep:** `bootstrap-labels.sh` çalıştırılmamış. Init script bunu otomatik çağırmıyor (template şu an böyle — gelecekte değişebilir).
 
@@ -130,7 +130,7 @@ git commit -m "chore: fix executable bits on scripts"
 
 **Beklenen output:**
 ```
-✓ Created label: agent:pm
+✓ Created label: agent:product-manager
 ✓ Created label: agent:architect
 ...
 ✓ Created label: type:vision
@@ -149,12 +149,12 @@ gh label list -R atilcan65/$REPO_NAME | wc -l
 
 ### S2.1 — Agent issue almıyor (label var ama agent silent)
 
-**Belirti:** Issue'ya `agent:pm` label'ı düştü, ama PM agent (Claude Code instance) bir şey yapmıyor.
+**Belirti:** Issue'ya `agent:product-manager` label'ı düştü, ama PM agent (Claude Code instance) bir şey yapmıyor.
 
 **Sebep adayları:**
 1. `agent-watch.sh` çalışmıyor (servis down)
 2. Agent zaten başka issue üzerinde çalışıyor (busy)
-3. Label yazımı yanlış (örn. `agent: pm` boşluklu)
+3. Label yazımı yanlış (örn. `agent: product-manager` boşluklu)
 4. Webhook/polling delay (max 30 sn)
 
 **Çözüm:**
@@ -179,7 +179,7 @@ gh label list -R atilcan65/$REPO_NAME | wc -l
    ```bash
    gh issue view 42 --json labels --jq '.labels[].name'
    ```
-   **Beklenen:** `agent:pm` (iki nokta sonrası boşluk YOK)
+   **Beklenen:** `agent:product-manager` (iki nokta sonrası boşluk YOK)
 
 4. Agent busy ise per-role state file'a bak (her rolün ayrı dosyası var, `/var/log/dev-studio/agent-state/<role>.json`):
    ```bash
@@ -239,7 +239,7 @@ gh label list -R atilcan65/$REPO_NAME | wc -l
 
 ### S2.3 — Agent yanlış issue'yu alıyor
 
-**Belirti:** Architect, `agent:pm` label'lı issue'yu işliyor.
+**Belirti:** Architect, `agent:product-manager` label'lı issue'yu işliyor.
 
 **Sebep:** `agent-watch.sh` config'inde label routing yanlış veya iki agent aynı label'ı dinliyor.
 
@@ -290,8 +290,8 @@ gh label delete "needs-human" --confirm
 
 **Beklenen output:**
 ```
-- Label 'agent:pm' exists, updating color #ededed
-✓ Updated label: agent:pm
+- Label 'agent:product-manager' exists, updating color #ededed
+✓ Updated label: agent:product-manager
 + Label 'sprint:current' missing, creating
 ✓ Created label: sprint:current
 ✓ All labels synced (2 created, 8 updated, 0 errors)

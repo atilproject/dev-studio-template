@@ -181,10 +181,10 @@ gh pr list --state merged --search "merged:>$(date -d '14 days ago' +%Y-%m-%d)" 
 ✓ Last poll: 2026-06-12 18:00:30 (5s ago)
 ✓ Queue depth: 0
 ✓ Agents:
-  pm:         idle    (last activity: 12m ago)
-  architect:  idle    (last activity: 2h ago)
-  developer:  busy    (#42, started 35m ago)
-  tester:     idle    (last activity: 4h ago)
+  product-manager: idle    (last activity: 12m ago)
+  architect:       idle    (last activity: 2h ago)
+  developer:       busy    (#42, started 35m ago)
+  tester:          idle    (last activity: 4h ago)
 ```
 
 ### 3.2 Detaylı health check
@@ -226,7 +226,7 @@ Verbose mod (her check'in detayını gör):
 Logs `logs/` klasöründe (init script tarafından oluşturuluyor):
 ```bash
 tail -f logs/agent-watch.log         # canlı watch loop
-tail -f logs/agent-pm.log            # PM agent yorumları
+tail -f logs/product-manager.watch.log   # PM watcher event'leri
 tail -f logs/notify.log              # Telegram mesajları
 ```
 

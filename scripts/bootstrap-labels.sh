@@ -44,14 +44,14 @@ LABELS=(
   "status:done|0e8a16|Completed"
   # Agent (assignment)
   "agent:orchestrator|5319e7|Assigned to Orchestrator agent"
-  "agent:pm|5319e7|Assigned to Product Manager agent"
+  "agent:product-manager|5319e7|Assigned to Product Manager agent"
   "agent:architect|5319e7|Assigned to Architect agent"
   "agent:developer|5319e7|Assigned to Developer agent"
   "agent:tester|5319e7|Assigned to Tester agent"
   "agent:human|ededed|Human owner intervention required"
   # CC (review fanout) — per ADR-0002
   "cc:orchestrator|bfdadc|Review/awareness from Orchestrator"
-  "cc:pm|bfdadc|Review/awareness from Product Manager"
+  "cc:product-manager|bfdadc|Review/awareness from Product Manager"
   "cc:architect|bfdadc|Review/awareness from Architect"
   "cc:developer|bfdadc|Review/awareness from Developer"
   "cc:tester|bfdadc|Review/awareness from Tester"
