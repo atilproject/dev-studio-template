@@ -9,7 +9,7 @@ body:
       label: Stuck Agent
       options:
         - orchestrator
-        - pm
+        - product-manager
         - architect
         - developer
         - tester

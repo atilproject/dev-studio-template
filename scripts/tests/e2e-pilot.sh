@@ -281,7 +281,7 @@ fi
 
 # Kritik label'lar var mı kontrol
 EXPECTED_LABELS=(
-    "agent:pm"
+    "agent:product-manager"
     "agent:architect"
     "agent:developer"
     "agent:tester"
@@ -353,7 +353,7 @@ else
 fi
 
 # vision-intake label check
-if grep -q '"agent:pm"' .github/ISSUE_TEMPLATE/vision-intake.yml && \
+if grep -q '"agent:product-manager"' .github/ISSUE_TEMPLATE/vision-intake.yml && \
    grep -q '"type:vision"' .github/ISSUE_TEMPLATE/vision-intake.yml; then
     pass "vision-intake.yml has correct labels"
 else

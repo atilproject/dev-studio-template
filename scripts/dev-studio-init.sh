@@ -236,7 +236,7 @@ summary() {
   printf '\nNext steps:\n'
   printf '  1) bash scripts/dev-studio-start.sh start    # launch tmux session\n'
   printf '  2) bash scripts/install/dev-studio-install-systemd.sh   # (optional) install systemd watchers\n'
-  printf '  3) Open a GitHub issue with label "agent:pm" to feed your vision\n\n'
+  printf '  3) Open a GitHub issue with label "agent:product-manager" to feed your vision\n\n'
 }
 
 # --- Project board bootstrap ---------------------------------------------
