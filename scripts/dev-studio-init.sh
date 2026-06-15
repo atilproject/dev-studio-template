@@ -203,12 +203,42 @@ ensure_project_token() {
       ;;
   esac
 
-  # Write the secret. `gh secret set --body -` reads from stdin so the token
-  # never appears in process args (visible via ps).
-  if printf '%s' "$token" | gh secret set PROJECT_TOKEN \
-       --body - \
-       --repo "$GITHUB_OWNER/$GITHUB_REPO" >/dev/null 2>&1; then
-    ok "PROJECT_TOKEN secret written to $GITHUB_OWNER/$GITHUB_REPO"
+  # --- Write the secret via tmpfile, not pipe (ADR-0014 §3.6) -------------
+  # We previously used `printf '%s' "$token" | gh secret set --body -`.
+  # That pipe pattern non-deterministically delivered a truncated payload to
+  # `gh` (observed: a 40-byte classic PAT arriving as 1 byte on the runner).
+  # Suspected cause: SIGPIPE timing / pipe-buffer flush race between
+  # short-lived `printf` and `gh`'s stdin reader. Local health-check still
+  # passed because it used the in-memory $token, masking the corruption
+  # until the workflow runner read the 1-byte secret and HTTP 401'd.
+  #
+  # Fix: write to a mode-0600 tempfile (umask 077), assert byte count, then
+  # redirect the file into `gh secret set`. File I/O has a deterministic EOF
+  # so no race is possible. Tempfile is shredded on EXIT regardless of
+  # success/failure.
+  local _secret_tmp
+  local _old_umask
+  _old_umask=$(umask)
+  umask 077
+  _secret_tmp=$(mktemp -t pplx-pt.XXXXXX)
+  umask "$_old_umask"
+  # shellcheck disable=SC2064  # we want $_secret_tmp expanded now
+  trap "shred -u '$_secret_tmp' 2>/dev/null || rm -f '$_secret_tmp'" EXIT
+
+  printf '%s' "$token" > "$_secret_tmp"
+
+  # Sanity-check the bytes on disk match $token length exactly.
+  local _expected_len _actual_len
+  _expected_len=${#token}
+  _actual_len=$(wc -c < "$_secret_tmp" | tr -d ' ')
+  if [ "$_expected_len" -ne "$_actual_len" ]; then
+    fail "PROJECT_TOKEN tempfile byte-count mismatch (expected=$_expected_len, on-disk=$_actual_len). Aborting before secret write. See ADR-0014 §3.6."
+  fi
+
+  if gh secret set PROJECT_TOKEN \
+       --repo "$GITHUB_OWNER/$GITHUB_REPO" \
+       < "$_secret_tmp" >/dev/null 2>&1; then
+    ok "PROJECT_TOKEN secret written to $GITHUB_OWNER/$GITHUB_REPO ($_actual_len bytes)"
   else
     fail "failed to write PROJECT_TOKEN secret. Check gh auth status and repo permissions."
   fi
