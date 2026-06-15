@@ -253,8 +253,65 @@ ADR-0013. **Rejected.**
 - **ADR-0013** — Status label → board sync workflow (this ADR fixes its
   auth model).
 
+## 3.6 Tempfile-based secret write (no pipe)
+
+### Problem observed (2026-06-15, AtilCalculator Round 3)
+
+After §3.5 (canary) shipped, a fresh bootstrap still failed end-to-end
+with HTTP 401 on the canary workflow. The canary log printed
+`token_length=1`. The repo secret was a single byte — yet the local
+§3.4 health-check (which pings the in-memory `$token`) passed cleanly.
+
+Root cause: the pipe pattern
+
+```sh
+printf '%s' "$token" | gh secret set PROJECT_TOKEN --body -
+```
+
+delivered a truncated payload to `gh`'s stdin on the runner. Suspected
+mechanism is a SIGPIPE timing / kernel pipe-buffer race between a
+short-lived `printf` writer and `gh`'s reader on stdin — the writer
+exits before `gh` drains the buffer and the remaining bytes are
+discarded. The race is non-deterministic; it surfaced on this machine
+but not on the template author's. Local §3.4 masked the bug because it
+uses `$token` in-memory, not the bytes stored in the secret.
+
+### Decision
+
+Write the token to a mode-0600 tempfile under `umask 077`, then redirect
+the file into `gh secret set`. File I/O has a deterministic EOF —
+`gh` reads the entire file in one stream with no race possible.
+The tempfile is shredded on EXIT regardless of success/failure.
+
+```sh
+umask 077
+tmp=$(mktemp -t pplx-pt.XXXXXX)
+trap "shred -u '$tmp' 2>/dev/null || rm -f '$tmp'" EXIT
+printf '%s' "$token" > "$tmp"
+# Assert byte count before write
+[ "$(wc -c < "$tmp")" = "${#token}" ] || fail "byte mismatch"
+gh secret set PROJECT_TOKEN --repo "$owner/$repo" < "$tmp"
+```
+
+### Why the tempfile is safe
+
+- Created under `umask 077` → mode 0600, not world- or group-readable.
+- `mktemp` uses a unique random suffix, no predictable path attack.
+- Shredded on EXIT trap, regardless of script success/failure.
+- Never written to a shared `/tmp` location on multi-tenant systems
+  in normal init usage (single-user Linux VM, ADR-0010).
+
+### Trade-offs
+
+- Token bytes briefly hit disk. Acceptable on a single-user dev VM
+  where the user's shell history, env, and `/proc/<pid>/environ` are
+  already trusted surfaces.
+- 0600 + shred + EXIT trap makes this strictly safer than a longer-lived
+  in-memory variable that could be paged to swap.
+
 ## References
 
 - Failing run: `https://github.com/atilcan65/AtilCalculator/actions/runs/27506301845`
+- Truncation case: `https://github.com/atilcan65/AtilCalculator/actions/runs/27532026816` (`token_length=1`)
 - Error: `Could not resolve to a ProjectV2 with the number 6`
 - GitHub docs: <https://docs.github.com/en/actions/security-guides/automatic-token-authentication>

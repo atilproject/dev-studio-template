@@ -262,6 +262,8 @@ fi
 REPO_ROOT_FOR_WORKFLOW="$(git -C "$(dirname "$0")/.." rev-parse --show-toplevel 2>/dev/null || pwd)"
 WF_SRC="$REPO_ROOT_FOR_WORKFLOW/.github/workflows/status-label-to-board.yml.tmpl"
 WF_DST="$REPO_ROOT_FOR_WORKFLOW/.github/workflows/status-label-to-board.yml"
+# Track whether we changed the workflow file so we can commit+push afterwards.
+WF_CHANGED=0
 if [ -f "$WF_SRC" ]; then
   log "rendering status-label-to-board workflow (ADR-0013)"
   sed -e "s|{{GITHUB_OWNER}}|${OWNER}|g" \
@@ -270,6 +272,7 @@ if [ -f "$WF_SRC" ]; then
   # Remove the .tmpl source after successful render (template-grade contract).
   rm -f "$WF_SRC"
   ok "workflow rendered: .github/workflows/status-label-to-board.yml (project #$PROJECT_NUMBER)"
+  WF_CHANGED=1
 else
   # If .yml already exists (re-run case) update PROJECT_NUMBER in place.
   if [ -f "$WF_DST" ]; then
@@ -278,8 +281,62 @@ else
     sed -i.bak -E "s|PROJECT_OWNER: \"[^\"]+\"|PROJECT_OWNER: \"$OWNER\"|g" "$WF_DST"
     rm -f "$WF_DST.bak"
     ok "workflow updated"
+    WF_CHANGED=1
   else
     warn "status-label-to-board template not found (skipping render) — ADR-0013 sync disabled"
+  fi
+fi
+
+# ---------- commit + push rendered workflow (ADR-0013 §post-render) ----------
+# The workflow file is rendered locally above. Without committing and pushing
+# it, the workflow does not exist on the remote — GitHub Actions never runs it,
+# and the status:* → Board Status field sync never happens. Cards land in
+# "No Status" and stay there forever.
+#
+# Observed failure (2026-06-15, AtilCalculator Round 4): canary + auth passed,
+# Issue #1 + PR #2 both labeled correctly, but board sync API returned 404
+# because the .yml never reached origin. Root cause: this commit+push step was
+# missing from the previous bootstrap.
+#
+# This block runs only when WF_CHANGED=1 and we're inside a git repo with a
+# remote 'origin'. Skipped in DRY_RUN.
+if [ "$WF_CHANGED" = "1" ] && [ "${DRY_RUN:-0}" != "1" ]; then
+  if git -C "$REPO_ROOT_FOR_WORKFLOW" rev-parse --git-dir >/dev/null 2>&1 \
+     && git -C "$REPO_ROOT_FOR_WORKFLOW" remote get-url origin >/dev/null 2>&1; then
+    log "committing rendered workflow to origin/main"
+    # Ensure git identity is set (CI / fresh-clone envs may not have one).
+    if ! git -C "$REPO_ROOT_FOR_WORKFLOW" config user.email >/dev/null 2>&1; then
+      git -C "$REPO_ROOT_FOR_WORKFLOW" config user.email "dev-studio-bot@local"
+    fi
+    if ! git -C "$REPO_ROOT_FOR_WORKFLOW" config user.name >/dev/null 2>&1; then
+      git -C "$REPO_ROOT_FOR_WORKFLOW" config user.name "dev-studio-init"
+    fi
+    # Stage exactly the two relevant paths — never `git add .` (avoid sweeping
+    # in unrelated dirty state).
+    git -C "$REPO_ROOT_FOR_WORKFLOW" add \
+      ".github/workflows/status-label-to-board.yml" \
+      ".github/workflows/status-label-to-board.yml.tmpl" 2>/dev/null || true
+    # Anything to commit?
+    if ! git -C "$REPO_ROOT_FOR_WORKFLOW" diff --cached --quiet 2>/dev/null; then
+      if git -C "$REPO_ROOT_FOR_WORKFLOW" commit \
+           -m "chore(bootstrap): render status-label-to-board workflow (project #$PROJECT_NUMBER) [ADR-0013]" \
+           >/dev/null 2>&1; then
+        if git -C "$REPO_ROOT_FOR_WORKFLOW" push origin HEAD >/dev/null 2>&1; then
+          ok "workflow committed and pushed to origin (ADR-0013 sync now active)"
+        else
+          warn "workflow committed locally but push failed. Run: git -C $REPO_ROOT_FOR_WORKFLOW push origin HEAD"
+        fi
+      else
+        warn "git commit failed for rendered workflow. Inspect: git -C $REPO_ROOT_FOR_WORKFLOW status"
+      fi
+    else
+      log "no workflow changes staged — already up to date on origin"
+    fi
+  else
+    warn "not in a git repo with origin remote — skipping auto commit+push. Run manually:"
+    warn "  git add .github/workflows/status-label-to-board.yml{,.tmpl}"
+    warn "  git commit -m 'chore(bootstrap): render status-label-to-board workflow'"
+    warn "  git push origin HEAD"
   fi
 fi
 

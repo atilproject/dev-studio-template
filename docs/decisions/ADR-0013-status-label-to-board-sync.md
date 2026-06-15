@@ -136,6 +136,50 @@ the default token — same model as `label-cleanup.yml`.
   and ADR-0002's autonomy loop is label-driven. The board is the
   *view*, labels are the *state*.
 
+## Post-render commit + push (2026-06-15)
+
+### Problem observed (AtilCalculator Round 4)
+
+Fresh bootstrap completed cleanly: PROJECT_TOKEN canary green, Issue #1
+submitted with full label set, PM agent picked it up and opened PR #2
+with correct `type:docs / status:in-review / agent:human / cc:architect`
+labels. But both the issue and the PR landed in the Board's **No Status**
+lane and stayed there — the status-label-to-board workflow never ran.
+
+GitHub Actions API returned `HTTP 404` for the workflow file: it had been
+rendered locally by `bootstrap-project-board.sh` (the `.tmpl` was deleted,
+the `.yml` existed on disk) but **never committed and pushed to origin**.
+From GitHub's perspective the workflow simply did not exist on the repo.
+
+### Decision
+
+`bootstrap-project-board.sh` must commit and push the rendered workflow
+file (and the deletion of its `.tmpl` source) to `origin/HEAD` as the
+final step after rendering. This makes the workflow live on the remote
+before any issue/PR is created — so the very first `status:backlog`
+label application triggers a successful sync.
+
+Implementation notes:
+
+- Stage **exactly** the two paths (`status-label-to-board.yml` and its
+  `.tmpl`); never `git add .` — the launcher push at `dev-studio-init`
+  line ~263 may leave unrelated dirty state in the working tree that
+  must not be swept into this commit.
+- Set a fallback git identity (`dev-studio-init <dev-studio-bot@local>`)
+  if none is configured — fresh clones in CI / new dev VMs may not have
+  user.name / user.email set.
+- Idempotent: if `git diff --cached --quiet` shows no changes, skip
+  commit/push (re-runs after the first successful bootstrap).
+- DRY_RUN=1 skips this block entirely.
+
+### Why not push from `dev-studio-init.sh` instead?
+
+The init script defers workflow rendering to the board bootstrap because
+the project number isn't known until after the board is created. Pushing
+from init would either duplicate that logic or require a return value
+channel that doesn't exist today. Keeping the commit+push co-located with
+the render is simpler and atomic.
+
 ## Future work
 
 - Add a CI assertion that exactly one `status:*` label is present on
@@ -144,3 +188,7 @@ the default token — same model as `label-cleanup.yml`.
 - Add a board column for `status:blocked` if it does not yet exist
   (bootstrap script should be updated to seed it; currently it seeds
   the 5 happy-path columns only).
+- Add a smoke step at the end of `dev-studio-init.sh` that calls
+  `gh api repos/$OWNER/$REPO/contents/.github/workflows/status-label-to-board.yml`
+  and fails fast if the file is not present on origin — closes the
+  diagnostic gap that let this bug ship in Round 4.
