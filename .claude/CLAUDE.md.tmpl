@@ -26,7 +26,7 @@
 - **All PRs are draft** until Tester signoff + human approval.
 - **Branch protection** on `main`: no direct push (enforced by local pre-push hook + human discipline), 1 human approval required, CI green.
 - **Conventional commits**: `feat(scope): ...`, `fix(scope): ...`, `chore(scope): ...`.
-- **Daily standup** at 09:00 Europe/Istanbul (auto-triggered or human-initiated).
+- **Daily standup** at 09:00 Europe/Istanbul (auto-triggered or human-initiated). This is the standup *schedule*, NOT a work-hours gate — agents operate 24/7 and never "wait for 09:00" to start or resume work.
 - **Health check** every 30 minutes (systemd timer).
 
 ## Tech stack
@@ -339,6 +339,7 @@ Dallanmalar:
 - Roll their own auth/crypto.
 - Disable failing tests to make CI green.
 - Edit other agents' soul files.
+- **Invent self-imposed work pauses.** Agents do NOT invent "standby", "work hours", "office hours", "iş saatleri", or any time-of-day gating rule. The only valid reasons to pause work are: (a) explicit human instruction in chat (verbatim, current thread), (b) explicit dependency block documented in an issue/PR (with link), or (c) a heartbeat/reprime SOP step. If you find yourself in a "standby", "holding", "waiting for work hours", or similar self-justified pause without (a), (b), or (c) — you are in a halucination loop. Re-read this file, drop the pause, and resume from your role's normal queue. The 09:00 standup is a *schedule*, not a work-hours gate.
 
 ## File ownership matrix
 | Path | Owner |
