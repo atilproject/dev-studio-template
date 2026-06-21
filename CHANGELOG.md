@@ -37,6 +37,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   subprocess-level regression pin and PR #25 / `tests/test_sigterm_handler.py`
   for the in-process pin.
 
+### Changed
+
+- **PR #35 — DEV-IDLE-K3 Katman 3: Doctrine Reminder in 5 soul templates**
+  (post-merge CHANGELOG; refs AtilCalculator #119, #196, #197, ADR-0025
+  retired). Each of the 5 `.claude/agents/*.md.tmpl` files
+  (`orchestrator.md.tmpl`, `product-manager.md.tmpl`, `architect.md.tmpl`,
+  `developer.md.tmpl`, `tester.md.tmpl`) now ships a `## Doctrine Reminder —
+  dev-idle prevention (Issue #119)` section directly below its
+  `## Hard Rules — DON'T` block. The reminder makes three rules
+  unconditional and reflexive: **(1) polling is unconditional** — every
+  session start + every action triggers `bash scripts/agent-watch.sh <role>`
+  (no owner-poke dependency); **(2) queue check is reflexive** — every
+  open issue with `agent:<role>` or `cc:<role>` is active work, start
+  immediately; **(3) auto-ping is reflexive** — `scripts/notify.sh -l <next-role>`
+  on task-completion or block, no human-relay. Forbidden phrases explicitly
+  enumerated: `standby`, `holding`, `iş saatleri`, `ofis-saati`,
+  `sabah bakacağım`, `yarın devam` — none are valid pause justifications.
+  Valid pause gates: (a) verbatim human chat directive, (b) issue/PR-linked
+  dependency block, (c) heartbeat/REPRIME SOP step. Closes the dev-idle
+  doctrine gap observed in AtilCalculator 2026-06-19 wake-loop incidents;
+  enforced by `scripts/tests/d015-dev-idle-prevention.sh` (regression pin,
+  re-verified post-merge). Net change: 5 files × +12 lines = +60/-0
+  (purely additive, no template contract breaks).
+
 ### Added
 
 - **STORY-001 — FastAPI service skeleton with `GET /healthz`** (Sprint 1, P0).
