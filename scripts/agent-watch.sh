@@ -167,7 +167,7 @@ init_pr_merged_hwm() {
       PR_MERGED_LAST_SEEN="$(date -u -v-"${bsd_num}${bsd_unit}" '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
         || date -u '+%Y-%m-%dT%H:%M:%SZ')"
     fi
-    "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$PR_MERGED_LAST_SEEN"
+    "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "\"$PR_MERGED_LAST_SEEN\""
   fi
 }
 
@@ -181,7 +181,7 @@ init_pr_labeled_hwm() {
       PR_LABELED_LAST_SEEN="$(date -u -v-60S '+%Y-%m-%dT%H:%M:%SZ' 2>/dev/null \
         || date -u '+%Y-%m-%dT%H:%M:%SZ')"
     fi
-    "$STATE_HELPER" set "$ROLE" pr_labeled_last_seen_utc "$PR_LABELED_LAST_SEEN"
+    "$STATE_HELPER" set "$ROLE" pr_labeled_last_seen_utc "\"$PR_LABELED_LAST_SEEN\""
   fi
 }
 
@@ -541,7 +541,7 @@ query_periodic_backlog_scan() {
   # Fire: advance HWM and emit one synthetic event with queue list in context
   local now_iso
   now_iso="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
-  "$STATE_HELPER" set "$ROLE" last_synthetic_scan_utc "$now_iso" >/dev/null 2>&1 || true
+  "$STATE_HELPER" set "$ROLE" last_synthetic_scan_utc "\"$now_iso\"" >/dev/null 2>&1 || true
 
   jq -n \
     --arg role "$ROLE" \
@@ -655,7 +655,7 @@ query_pr_merged() {
   newest="$(echo "$raw" | jq -r '[.[].context.merged_at] | max // empty')"
   PR_MERGED_NEWEST_SEEN="$newest"  # kept for backward compat / unit tests
   if [ -n "$newest" ] && [ "$newest" != "null" ]; then
-    "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "$newest"
+    "$STATE_HELPER" set "$ROLE" pr_merged_last_seen_utc "\"$newest\""
   fi
 
   # v3.1 (ADR-0008): per-PR label-conditional filter.
@@ -726,7 +726,7 @@ query_pr_labeled() {
   newest="$(echo "$raw" | jq -r '[.[].updatedAt] | max // empty')"
   PR_LABELED_NEWEST_SEEN="$newest"
   if [ -n "$newest" ] && [ "$newest" != "null" ]; then
-    "$STATE_HELPER" set "$ROLE" pr_labeled_last_seen_utc "$newest"
+    "$STATE_HELPER" set "$ROLE" pr_labeled_last_seen_utc "\"$newest\""
   fi
 
   # Per-PR filter: only keep PRs whose labels match this role's wake-trigger set.
@@ -932,7 +932,7 @@ poll_once() {
      }'
 
   # Bump last_seen
-  "$STATE_HELPER" set "$ROLE" last_seen_utc "$now"
+  "$STATE_HELPER" set "$ROLE" last_seen_utc "\"$now\""
 
   # v3.1.1 (ADR-0008): HWM bump now lives inside query_pr_merged because the
   # subshell `$(query_pr_merged)` capture above drops any globals set by the
