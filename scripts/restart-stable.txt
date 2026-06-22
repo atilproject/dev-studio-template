@@ -1,0 +1,31 @@
+# Restart-stable label allowlist (Dev Studio)
+# =============================================================================
+# Labels listed here MAY be re-applied on watcher service restart
+# by scripts/post-restart-label-guard.sh.
+#
+# Labels NOT listed here are PRESERVED AS-IS — the post-restart hook
+# never removes or re-applies them. This is the Sprint 4 P0 fix for the
+# auto-revert bug (owner manual drift at restart).
+#
+# Pattern syntax: shell glob (case statement in post-restart-label-guard.sh).
+#   type:*    matches all labels starting with "type:"  (e.g. type:bug)
+#   sprint:*  matches all labels starting with "sprint:" (e.g. sprint:current)
+#
+# Curation gate (per design §Risk #1 mitigation):
+#   - Every change to this file requires architect PR review (same gate as
+#     .github/workflows/ per CLAUDE.md §File ownership matrix).
+#   - Per-change PR review, no batch updates.
+#   - Adding a cc:* label requires explicit architect justification in the
+#     PR body and link to a doctrine amendment (ADR-0012/0015 territory).
+#
+# Cadence (per design §Open questions Q3):
+#   Sprint 4 floor: architect review on every change.
+#   Quarterly retro: owner + architect review of the full allowlist.
+#
+# Default (per design §Data model + §Rollback safety posture):
+#   type:* + sprint:* are restart-stable (they're story metadata, not
+#   workflow state). cc:* and needs-*: are explicitly NOT restart-stable.
+# =============================================================================
+
+type:*
+sprint:*
