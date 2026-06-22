@@ -149,8 +149,17 @@ cmd_set() {
   local file
   file="$(state_path "$role")"
   [ -f "$file" ] || cmd_init "$role"
-  # Use --arg for safety; numeric/bool callers must JSON-encode if needed.
-  jq_inplace "$file" --arg v "$value" ".${key} = \$v"
+  # ADR-0034 JSON contract (ported from AtilCalculator PR #247 / hotfix #268):
+  # callers MUST pass JSON-parseable input. --argjson parses the value as JSON;
+  # invalid input fails fast (exit 2) instead of silently stringifying
+  # arrays/objects (the original --arg bug class).
+  if ! echo "$value" | jq -e . >/dev/null 2>&1; then
+    echo "ERROR: cmd_set requires JSON input (key=$key, value=$value)" >&2
+    echo "  hint: wrap strings in quotes, e.g. '\"hello\"' not 'hello'" >&2
+    echo "  hint: for arrays, use '[1,2,3]'; for null, use 'null'" >&2
+    exit 2
+  fi
+  jq_inplace "$file" --argjson v "$value" ".${key} = \$v"
 }
 
 cmd_seen() {
