@@ -756,8 +756,27 @@ query_pr_labeled() {
 
 # Orchestrator has a wider lens: all label changes on any issue/PR.
 query_board_changes() {
+  # RCA-19 / ADR-0036 §Part A: role-aware label change visibility.
+  #   - ROLE=orchestrator: return all label changes on any issue (unchanged)
+  #   - other roles: return label changes ONLY on issues with agent:<role>
+  # Event ID role-scoped: "board-${role}-${n}-${sorted_labels}"
   if [ "$ROLE" != "orchestrator" ]; then
-    echo "[]"
+    gh issue list \
+      --repo "$REPO" \
+      --state all \
+      --limit 50 \
+      --json number,title,url,updatedAt,labels,state \
+      --jq "[ .[] | select(.updatedAt > \"$LAST_SEEN\") |
+             select((.labels | map(.name) | index(\"agent:$ROLE\")) != null) |
+             {
+               id: (\"board-$ROLE-\" + (.number | tostring) + \"-\" + (.labels | map(.name) | sort | join(\"|\"))),
+               kind: \"label_change\",
+               number: .number,
+               title: .title,
+               url: .url,
+               updated_at: .updatedAt,
+               context: { state: .state, labels: [.labels[].name] }
+             } ]"
     return
   fi
   # Recent issue events for label/assignee changes since last_seen.
@@ -768,7 +787,7 @@ query_board_changes() {
     --json number,title,url,updatedAt,labels,state \
     --jq "[ .[] | select(.updatedAt > \"$LAST_SEEN\") |
            {
-             id: (\"board-\" + (.number | tostring) + \"-\" + .updatedAt),
+             id: (\"board-$ROLE-\" + (.number | tostring) + \"-\" + (.labels | map(.name) | sort | join(\"|\"))),
              kind: \"label_change\",
              number: .number,
              title: .title,
