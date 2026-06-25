@@ -47,10 +47,13 @@ log() { printf '[%s] %s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)" "$*" >&2; }
 fail() { log "ERROR: $*"; exit "${2:-1}"; }
 
 # --- 1. Required env-var validation (lens d fail-loud contract, d046 T1-T4) ---
-: "${SERVICE_NAME:?SERVICE_NAME required (e.g., myapp-web)}"
-: "${MODULE_PATH:?MODULE_PATH required (e.g., myapp.api.main:app)}"
-: "${DEPLOY_PORT:?DEPLOY_PORT required (numeric, e.g., 8000)}"
-: "${HEALTHZ_PATH:?HEALTHZ_PATH required (e.g., /healthz)}"
+# Explicit checks (NOT `: "${X:?msg}"`) because bash's `${X:?msg}` exits with
+# default code 1, but ADR-0047 §Decision.5 documents exit 3 for usage errors.
+# Use `fail "..." 3` to pin the exit code per the contract.
+if [[ -z "${SERVICE_NAME:-}" ]]; then fail "SERVICE_NAME required (e.g., myapp-web)" 3; fi
+if [[ -z "${MODULE_PATH:-}" ]]; then fail "MODULE_PATH required (e.g., myapp.api.main:app)" 3; fi
+if [[ -z "${DEPLOY_PORT:-}" ]]; then fail "DEPLOY_PORT required (numeric, e.g., 8000)" 3; fi
+if [[ -z "${HEALTHZ_PATH:-}" ]]; then fail "HEALTHZ_PATH required (e.g., /healthz)" 3; fi
 
 # --- 2. Env-var shape validation (d046 T6 + T7) ---
 if ! [[ "$DEPLOY_PORT" =~ ^[0-9]+$ ]]; then

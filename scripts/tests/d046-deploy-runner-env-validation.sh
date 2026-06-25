@@ -67,38 +67,66 @@ pass "deploy-runner.sh exists and is executable"
 
 # --- T1: missing SERVICE_NAME → exit non-zero + stderr contains SERVICE_NAME ---
 section "T1: missing SERVICE_NAME → fail-loud"
+env -i PATH="$PATH" HOME="$HOME" bash "$DEPLOY_RUNNER" >/dev/null 2>&1
+ec=$?
 out="$(env -i PATH="$PATH" HOME="$HOME" bash "$DEPLOY_RUNNER" 2>&1 || true)"
 if [[ "$out" == *"SERVICE_NAME"* ]] && [[ "$out" == *"required"* || "$out" == *"missing"* || "$out" == *"ERROR"* ]]; then
   pass "missing SERVICE_NAME produces clear error mentioning SERVICE_NAME"
 else
   fail "missing SERVICE_NAME did not produce clear error" "got: $out"
 fi
+if [[ "$ec" -eq 3 ]]; then
+  pass "missing SERVICE_NAME exits with code 3 (ADR-0047 §Decision.5 contract)"
+else
+  fail "missing SERVICE_NAME exit code drift" "expected 3, got $ec — bash \${X:?msg} exits 1 by default; use explicit fail 3"
+fi
 
 # --- T2: missing MODULE_PATH → exit non-zero + stderr contains MODULE_PATH ---
 section "T2: missing MODULE_PATH → fail-loud"
+env -i PATH="$PATH" HOME="$HOME" SERVICE_NAME=myapp-web bash "$DEPLOY_RUNNER" >/dev/null 2>&1
+ec=$?
 out="$(env -i PATH="$PATH" HOME="$HOME" SERVICE_NAME=myapp-web bash "$DEPLOY_RUNNER" 2>&1 || true)"
 if [[ "$out" == *"MODULE_PATH"* ]] && [[ "$out" == *"required"* || "$out" == *"missing"* || "$out" == *"ERROR"* ]]; then
   pass "missing MODULE_PATH produces clear error mentioning MODULE_PATH"
 else
   fail "missing MODULE_PATH did not produce clear error" "got: $out"
 fi
+if [[ "$ec" -eq 3 ]]; then
+  pass "missing MODULE_PATH exits with code 3"
+else
+  fail "missing MODULE_PATH exit code drift" "expected 3, got $ec"
+fi
 
 # --- T3: missing DEPLOY_PORT → exit non-zero + stderr contains DEPLOY_PORT ---
 section "T3: missing DEPLOY_PORT → fail-loud"
+env -i PATH="$PATH" HOME="$HOME" SERVICE_NAME=myapp-web MODULE_PATH=myapp.api.main:app bash "$DEPLOY_RUNNER" >/dev/null 2>&1
+ec=$?
 out="$(env -i PATH="$PATH" HOME="$HOME" SERVICE_NAME=myapp-web MODULE_PATH=myapp.api.main:app bash "$DEPLOY_RUNNER" 2>&1 || true)"
 if [[ "$out" == *"DEPLOY_PORT"* ]] && [[ "$out" == *"required"* || "$out" == *"missing"* || "$out" == *"ERROR"* ]]; then
   pass "missing DEPLOY_PORT produces clear error mentioning DEPLOY_PORT"
 else
   fail "missing DEPLOY_PORT did not produce clear error" "got: $out"
 fi
+if [[ "$ec" -eq 3 ]]; then
+  pass "missing DEPLOY_PORT exits with code 3"
+else
+  fail "missing DEPLOY_PORT exit code drift" "expected 3, got $ec"
+fi
 
 # --- T4: missing HEALTHZ_PATH → exit non-zero + stderr contains HEALTHZ_PATH ---
 section "T4: missing HEALTHZ_PATH → fail-loud"
+env -i PATH="$PATH" HOME="$HOME" SERVICE_NAME=myapp-web MODULE_PATH=myapp.api.main:app DEPLOY_PORT=8000 bash "$DEPLOY_RUNNER" >/dev/null 2>&1
+ec=$?
 out="$(env -i PATH="$PATH" HOME="$HOME" SERVICE_NAME=myapp-web MODULE_PATH=myapp.api.main:app DEPLOY_PORT=8000 bash "$DEPLOY_RUNNER" 2>&1 || true)"
 if [[ "$out" == *"HEALTHZ_PATH"* ]] && [[ "$out" == *"required"* || "$out" == *"missing"* || "$out" == *"ERROR"* ]]; then
   pass "missing HEALTHZ_PATH produces clear error mentioning HEALTHZ_PATH"
 else
   fail "missing HEALTHZ_PATH did not produce clear error" "got: $out"
+fi
+if [[ "$ec" -eq 3 ]]; then
+  pass "missing HEALTHZ_PATH exits with code 3"
+else
+  fail "missing HEALTHZ_PATH exit code drift" "expected 3, got $ec"
 fi
 
 # --- T5: all 4 required env vars set + GITHUB_SHA → --dry-run proceeds ---
