@@ -94,12 +94,12 @@ dependency skip, WIP cap, negative, usage, invalid role, audit log).
 
 ---
 
-## d-test convention — `scripts/tests/dNNN-*.sh` (ADR-0031)
+## d-test convention — `scripts/tests/dNNN-*.sh` (ADR-0046)
 
 Regression tests for shell-script / integration / doctrine-level behavior.
 **One file = one bug class.** File name encodes the bug class + number;
 header narrative explains the bug, root cause, and fix PR. Canonical pattern
-codified in [ADR-0031](../docs/decisions/ADR-0031-d-test-convention.md).
+codified in [ADR-0046](../docs/decisions/ADR-0046-d-test-convention.md).
 
 ### File naming
 
@@ -109,7 +109,7 @@ codified in [ADR-0031](../docs/decisions/ADR-0031-d-test-convention.md).
 - `<short-kebab-slug>` — kebab-case, ≤ 40 chars, lowercase, no underscores.
 - Grep next free number: `ls scripts/tests/d[0-9]* | sort -V`
 
-### Authoring rules (TL;DR — full rules in ADR-0031)
+### Authoring rules (TL;DR — full rules in ADR-0046)
 
 1. **One file per bug class.** Never bundle two regressions.
 2. **First line `set -uo pipefail`** (NOT `-e` — assertions must run after
@@ -184,5 +184,5 @@ exit 0
 
 ### Reference
 
-- [ADR-0031](../docs/decisions/ADR-0031-d-test-convention.md) — full convention spec
+- [ADR-0046](../docs/decisions/ADR-0046-d-test-convention.md) — full convention spec
 - AtilCalculator `scripts/tests/` (d006–d033) — pattern origin
