@@ -180,6 +180,7 @@ exit 0
 | `d031-claim-next-ready.sh` | ADR-0038 §Layer 2 / Issue #272 | Auto-claim correctness |
 | `d032-rca-19-status-transition-wake.sh` | ADR-0036 / Issue #233 | Status-transition wake fix |
 | `d033-4-soul-coverage.sh` | ADR-0038 §Layer 3 | 4 soul files have §Auto-Claim Protocol section |
+| `d068b-tmux-send-keys-split-sleep.sh` | Issue #935 (TD-068b) | tmux peer-poke / re-prime text+Enter split + env-override sleep `WAKE_KEYS_GAP_SEC` (5 sites) |
 | `dreg-post-restart-label-guard.sh` | Issue #261 | Post-restart label guard |
 
 ### Reference

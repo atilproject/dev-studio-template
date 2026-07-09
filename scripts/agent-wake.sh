@@ -68,5 +68,7 @@ if [ -z "$pane_id" ]; then
 fi
 
 # T7: literal-mode (-l) so backticks and $VAR in the message survive intact.
+# TD-068b (Issue #935): env-override sleep between text and Enter (default 0.5s, override via WAKE_KEYS_GAP_SEC) prevents tmux from collapsing both into a single literal keystroke under load.
 tmux send-keys -t "$pane_id" -l "$MSG" 2>/dev/null || exit 0
+sleep "${WAKE_KEYS_GAP_SEC:-0.5}"
 tmux send-keys -t "$pane_id" Enter 2>/dev/null || true
