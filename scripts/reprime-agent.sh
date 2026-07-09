@@ -141,7 +141,10 @@ sleep 1
 if [ "$REPRIME_SKIP_COMPACT" != "1" ]; then
   if [ "$REPRIME_USE_CLEAR" = "1" ]; then
     echo "→ Sending /clear to ${TARGET} (HARD reset — context overflow / frozen pane)"
-    tmux send-keys -t "$TARGET" "/clear" Enter
+    # TD-068b (Issue #935): split text + Enter with env-override sleep (default 0.5s, override via WAKE_KEYS_GAP_SEC) prevents tmux from collapsing both into a single literal keystroke under load.
+    tmux send-keys -t "$TARGET" -l "/clear"
+    sleep "${WAKE_KEYS_GAP_SEC:-0.5}"
+    tmux send-keys -t "$TARGET" Enter
     # /clear wipes conversation history entirely. The kickoff re-read instruction
     # in the re-prime message restores doctrine.
     #
@@ -157,7 +160,10 @@ if [ "$REPRIME_SKIP_COMPACT" != "1" ]; then
     sleep 2
   else
     echo "→ Sending /compact to ${TARGET} (deterministic compaction)"
-    tmux send-keys -t "$TARGET" "/compact" Enter
+    # TD-068b (Issue #935): split text + Enter with env-override sleep (default 0.5s, override via WAKE_KEYS_GAP_SEC) prevents tmux from collapsing both into a single literal keystroke under load.
+    tmux send-keys -t "$TARGET" -l "/compact"
+    sleep "${WAKE_KEYS_GAP_SEC:-0.5}"
+    tmux send-keys -t "$TARGET" Enter
     # /compact can take 30-90s; we don't block here, just give Claude a head start
     # before the re-prime message lands. Re-prime is itself soft-enqueued so the
     # agent processes /compact first regardless.
@@ -225,6 +231,8 @@ BUFFER_NAME="reprime-${ROLE}-$$"
 tmux load-buffer -b "$BUFFER_NAME" "$TMP_BUF"
 tmux paste-buffer -b "$BUFFER_NAME" -t "$TARGET" -p
 tmux delete-buffer -b "$BUFFER_NAME"
+# TD-068b (Issue #935): env-override sleep between paste-buffer and Enter (default 0.5s, override via WAKE_KEYS_GAP_SEC) prevents tmux from collapsing both into a single literal keystroke under load.
+sleep "${WAKE_KEYS_GAP_SEC:-0.5}"
 tmux send-keys -t "$TARGET" Enter
 
 # ── STEP 5: append to journal (if available) ────────────────────────────────
