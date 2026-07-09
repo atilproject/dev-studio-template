@@ -4,6 +4,25 @@ All notable changes to this project are recorded here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.1] - 2026-07-09
+
+### Fixed
+
+- **PR #62 — TD-068b: tmux `send-keys` text + Enter race condition under load
+  (Issue #935 sister-fix).** `scripts/agent-wake.sh` (line ~67),
+  `scripts/agent-watch.sh` (line ~1494), and `scripts/reprime-agent.sh` (3
+  sites: `/clear`, `/compact`, paste-buffer Enter) all previously sent text +
+  Enter in two `send-keys` calls with no sleep gap. Under load tmux collapsed
+  both into a single literal keystroke (text rendered with no Enter firing,
+  leaving the agent's prompt buffer half-typed and unresponsive). Fix splits
+  text + Enter explicitly with an env-override sleep — `sleep "${WAKE_KEYS_GAP_SEC:-0.5}"`
+  — that callers can tighten for fast paths or relax for slow tmux hosts.
+  Five sites patched atomically (Cadence Rule 1); sister-port to
+  `atilcan65/AtilCalculator` PR #936 squash `5c4e5784`. Regression pin:
+  `scripts/tests/d068b-tmux-send-keys-split-sleep.sh` (10 TCs: bundled-keystroke
+  detection, env-override, 5-site coverage, Escape preserved, `bash -n`, paste-buffer,
+  A1 env-override compliance, etc.).
+
 ## [Unreleased]
 
 ### Changed
