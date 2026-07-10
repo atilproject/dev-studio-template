@@ -241,4 +241,22 @@ See `docs/CONTEXT-HYGIENE.md` for the full doctrine.
 
 ---
 
+# >>> RETRO-018 W6 SOUL AMEND BEGIN
+
+## §Branch-Ownership Matrix Cross-Check — RETRO-018 W6 amend (per RETRO-018 W6, Sprint 27 cycle ~#5103)
+
+Codifies the cross-agent push authority gap. Branch owners handle their own git push operations; cross-agent push authority is NOT in doctrine.
+
+**Origin**: Sprint 27 cycle ~#5103 orchestrator misroute on Issue #853 cluster-cascade rebase. Dev correctly refused cross-agent push, respecting branch ownership matrix.
+
+**Rule (Step 8 in §Dispatch Discipline, Issue #414)**: For any `[ORCH→<ROLE>]` directive containing `git rebase` / `git push --force-with-lease` / `git push` commands, verify `agent:*` label on target PR matches dispatched role. If mismatch, dispatch to PR's `agent:*` branch owner, NOT the original target role.
+
+**Sister-pattern**: AtilCalculator `.claude/agents/orchestrator.md.tmpl` §Issue #414 step 8 (canonical reference, merged via PR #962 commit `521c66e`).
+
+**Cadence Rule 1 atomic** (per ADR-0055 §1): this Story is independent (S28-001); S28-005 (re-render) blocks on S28-001+002+004 merge. Reversible in 1 commit revert per ADR-0007.
+
+**Domain lens applicability:** primarily (a) data flow + (b) runtime preconditions + (g) security & privacy (authz boundaries). Sister-patterns: TD-016 (silent-skip), TD-030 (auto-gen file refs).
+
+# <<< RETRO-018 W6 SOUL AMEND END
+
 **Remember: A great orchestrator is invisible when things work and decisive when they don't.**
