@@ -1,12 +1,17 @@
 #!/usr/bin/env bash
-# d015-dev-idle-prevention.sh — regression test for Dev-Idle Prevention (Katman 1+2).
+# d015-dev-idle-prevention.sh — regression test for Issue #119 (Katman 1+2).
 #
-# Katman 1: `poll_once` JSON output now includes `wake_nudge` field. When
-# `agent:<role>` or `cc:<role>` is on open issues, wake_nudge emits even
-# if `new_events` is empty. The nudge exposes the queue.
+# Issue #119 (2026-06-19): dev agent goes idle between pokes. Root cause:
+# dev session doesn't run `agent-watch.sh developer --loop`, so `poll_once`
+# never invoked → no heartbeat → no events surface → idle session concludes
+# "no work" without checking the queue.
 #
-# Katman 2: `wake_pane_for_role` is now called with combined payload
-# (events + nudges), so the agent wakes on nudge alone.
+# Fix (Katman 1+2):
+#   - Katman 1: `poll_once` JSON output now includes `wake_nudge` field.
+#     When `agent:<role>` or `cc:<role>` is on open issues, wake_nudge emits
+#     even if `new_events` is empty. The nudge exposes the queue.
+#   - Katman 2: `wake_pane_for_role` is now called with combined payload
+#     (events + nudges), so the agent wakes on nudge alone.
 #
 # Bug-class defended against:
 #   1. wake_nudge field missing from poll_once JSON output (Katman 1 not applied)
@@ -27,6 +32,8 @@
 #   T9:  Wake nudge guarded by REPO env var (no crash if unset)
 #
 # Exit code: 0 = all pass, 1 = at least one fail.
+#
+# Run standalone: bash scripts/tests/d015-dev-idle-prevention.sh
 
 set -uo pipefail
 
@@ -63,10 +70,11 @@ else
 fi
 
 # ============================================================================
-# T2: wake_nudge initialized to empty array
+# T2: wake_nudge is [] when no open work
 # ============================================================================
 section "T2: wake_nudge initialized to empty array"
-if grep -Eq "local wake_nudge='\[\]'" "$WATCH_SH"; then
+if grep -Eq '^\s*local wake_nudge=.\\[\\\]' "$WATCH_SH" || \
+   grep -Eq "local wake_nudge='\[\]'" "$WATCH_SH"; then
   pass "wake_nudge initialized to '[]' before queue check"
 else
   fail "wake_nudge not initialized to empty array" "expected 'local wake_nudge=\"[]\"' or similar at start of computation"
@@ -76,7 +84,10 @@ fi
 # T3: wake_nudge computed when agent:<role> open issues exist
 # ============================================================================
 section "T3: wake_nudge computed when agent:<role> label exists on open issues"
-if grep -Fq 'label "agent:${ROLE}"' "$WATCH_SH"; then
+# Verify the gh call to count agent:<role> open issues exists. Accepts either
+# gh issue list --label or gh api with labels= format.
+if (grep -Fq 'labels=agent:${ROLE}' "$WATCH_SH" || \
+    grep -Fq 'label "agent:${ROLE}"' "$WATCH_SH"); then
   pass "queue check filters by agent:<role> label"
 else
   fail "queue check missing" "expected gh call filtering by agent:\${ROLE} label"
@@ -86,7 +97,8 @@ fi
 # T4: wake_nudge computed when cc:<role> open issues exist
 # ============================================================================
 section "T4: wake_nudge computed when cc:<role> label exists on open issues"
-if grep -Fq 'label "cc:${ROLE}"' "$WATCH_SH"; then
+if (grep -Fq 'labels=cc:${ROLE}' "$WATCH_SH" || \
+    grep -Fq 'label "cc:${ROLE}"' "$WATCH_SH"); then
   pass "cc queue check filters by cc:<role> label"
 else
   fail "cc queue check missing" "expected gh call filtering by cc:\${ROLE} label"
@@ -106,10 +118,15 @@ fi
 # T6: wake_nudge event id format
 # ============================================================================
 section "T6: wake_nudge event id format: wake-nudge-<role>-<ts>"
-if grep -Fq 'wake-nudge-' "$WATCH_SH"; then
-  pass "wake_nudge event id uses wake-nudge- prefix"
+if grep -Fq 'wake-nudge-' "$WATCH_SH" | grep -Fq '$role'; then
+  pass "wake_nudge event id format correct"
 else
-  fail "wake_nudge event id format missing" "expected 'wake-nudge-' prefix in event id"
+  # Looser check: just verify 'wake-nudge-' prefix is referenced
+  if grep -Fq 'wake-nudge-' "$WATCH_SH"; then
+    pass "wake_nudge event id uses wake-nudge- prefix"
+  else
+    fail "wake_nudge event id format missing" "expected 'wake-nudge-' prefix in event id"
+  fi
 fi
 
 # ============================================================================
@@ -128,6 +145,8 @@ fi
 # T8: Katman 2 — wake_pane_for_role called with combined payload
 # ============================================================================
 section "T8: Katman 2 — wake_pane_for_role receives events + nudges"
+# Verify the wake_pane_for_role call now uses combined payload (events + nudges)
+# rather than only new_events.
 if grep -Fq 'wake_payload' "$WATCH_SH" && \
    grep -Fq '$e + $n' "$WATCH_SH"; then
   pass "wake_pane_for_role called with combined payload (events + nudges)"
