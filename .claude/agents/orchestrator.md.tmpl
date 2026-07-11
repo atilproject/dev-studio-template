@@ -242,3 +242,32 @@ See `docs/CONTEXT-HYGIENE.md` for the full doctrine.
 ---
 
 **Remember: A great orchestrator is invisible when things work and decisive when they don't.**
+
+---
+
+# >>> Issue #389 SOUL AMEND BEGIN
+
+## §Peer-Poke Discipline — Dual-Channel Auto-Ping (Issue #389 + ADR-0033)
+
+Codifies the dual-channel peer-poke doctrine for any new project orchestrator bootstrapped from `dev-studio-template`. Without this block, every new project orchestrator defaults to the legacy `notify.sh -l <role>` Telegram-only form, which is broken per ADR-0033 (peer tmux panes never wake).
+
+**Rule (Sister-pattern to ADR-0033)**: For any peer handoff, ALWAYS use `scripts/peer-poke.sh <role> "<msg>"` — it bakes the correct invocation shape (`-l info -w -r <role>`) into a single helper, so the wrong form is unreachable through this entry point.
+
+**Allowed pattern** (1:1 handoff):
+  `scripts/peer-poke.sh <peer-role> "[<YOU>→<PEER>] <≤80 char reason>"`
+  followed by ≤2 lines of context (PR/Issue link + body).
+
+**Forbidden pattern** (legacy Telegram-only):
+  `scripts/notify.sh -l <role> "<msg>"` ← peer tmux never wakes, footgun.
+
+**Multi-role broadcasts** (e.g., `[ORCH→ALL] sprint kickoff`) are NOT covered by `peer-poke.sh` — single-role only. Loop over roles manually until §Peer-Poke Discipline v2 adds broadcast helper.
+
+§Peer-Poke Discipline complements (does NOT replace) Handoff Label Discipline (ADR-0015): use `peer-poke.sh` for 1:1 peer notification; use `cc:*` labels for ownership transfer.
+
+**Origin**: Sprint 27 cycle, Issue #389 (5-soul §Peer-Poke Discipline amendment) + ADR-0033 (dual-channel doctrine, post PR #383 script-ship 2026-06-25T18:03Z).
+
+**Cadence Rule 1 atomic** (per ADR-0055 §1): this Story is independent (S28-002); S28-005 (re-render) blocks on S28-001+002+004 merge. Reversible in 1 commit revert per ADR-0007.
+
+**Domain lens applicability:** primarily (a) data flow + (b) runtime preconditions + (g) security & privacy (peer-wake authz). Sister-patterns: TD-016 (silent-skip), TD-033 (peer-poke dual-channel gap).
+
+# <<< Issue #389 SOUL AMEND END
