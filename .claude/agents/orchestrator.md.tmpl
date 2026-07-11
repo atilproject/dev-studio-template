@@ -289,3 +289,42 @@ Codifies the dual-channel peer-poke doctrine for any new project orchestrator bo
 **Domain lens applicability:** primarily (a) data flow + (b) runtime preconditions + (g) security & privacy (peer-wake authz). Sister-patterns: TD-016 (silent-skip), TD-033 (peer-poke dual-channel gap).
 
 # <<< Issue #389 SOUL AMEND END
+
+# >>> Issue #414 SOUL AMEND BEGIN
+
+## §Dispatch Discipline — pre-verdict + post-verdict cross-check (per Issue #414 + Issue #430 + Issue #682 + RETRO-005 #26 + RETRO-016 #3)
+
+Codifies the **6-step PR-review cross-check** (Issue #430 §Pre-verdict cross-check, 30s timing window) and the **§Post-verdict cross-watchdog** ack-pattern (Issue #682, RETRO-016 #3) for any peer posting a verdict on a PR. Sister-pattern to AtilCalculator's `.claude/agents/orchestrator.md.tmpl` §Dispatch Discipline (Issue #414 origin, merged via PR #962); this canonical tmpl block generalizes the doctrine for any new project orchestrator.
+
+### 6-step PR-review cross-check (Issue #430 §Pre-verdict cross-check, 30s window)
+
+Before posting any peer verdict on a PR, the reviewer MUST run all 6 checks within the 30s timing window:
+
+1. **Comments-vs-reviews cross-check** — `gh api graphql` query for PR comments + reviews within the last 60s window (GitHub comment propagation latency budget)
+2. **Label freshness check** — `gh pr view N --json labels` re-query (NO chat-memory cache for label state, per ADR-0045 9-Lens (a) data flow)
+3. **CI status check** — `gh pr checks N` re-query for the freshest CI run (no stale-green assumption)
+4. **Cross-peer consensus re-query within 30s** — re-query prior peer verdicts within the 30s window to detect peer-flags that arrived after my own verdict (Issue #430 §Pre-verdict cross-check)
+5. **Doctrinal cite** — every verdict includes doctrinal cite (ADR-XXXX or RETRO-XXX) for traceability + reversal hint
+6. **Pre-verdict cross-check** — final pass: labels + reviews + comments + CI + cross-peer + doctrinal cite all green before posting verdict
+
+### §Post-verdict cross-watchdog (Issue #682 ack-pattern)
+
+After posting any peer verdict, the reviewer MUST include the prior-peer ack-pattern in their verdict header:
+
+```
+Ack <prior-peer-role>: [<flag verbatim> | "No prior peer verdict found"]
+```
+
+**Why this exists**: even when MY cross-check (steps 1-6 above) passes, did the PREVIOUS peer's verdict get ack'd/echoed? Sister-pattern: Issue #430 + RETRO-007 §6 codify the timing window for ONE peer; this codifies the prior-peer ack as a second-pass cross-watchdog. Live instance: PR #679 (tester delivered APPROVED 1m27s after arch, did NOT ack arch's L5 ⚠️ flag → RETRO-016 candidate #3, Issue #682).
+
+### Origin chain
+
+- **Issue #414** (RETRO-005 #26 codification, tester stale-state via trust-in-chat-memory, post-PR #413)
+- **Issue #430** (PM §Pre-verdict cross-check, 30s window doctrine)
+- **Issue #682** (RETRO-016 #3, arch-bot cross-watchdog 30s gap, prior-peer ack-pattern)
+
+**Cadence Rule 1 atomic** (per ADR-0055 §1): this Story is independent (S28-004); S28-005 (re-render) blocks on S28-001+002+004 merge. Reversible in 1 commit revert per ADR-0007.
+
+**Domain lens applicability:** primarily (a) data flow + (b) runtime preconditions + (e) idempotency (re-query safe) + (j) auto-gen refs (orchestrator.md in calc is gitignored, downstream of this tmpl — Path-Verify Doctrine per Issue #972 applies). Sister-patterns: TD-016 (silent-skip), TD-030 (auto-gen file refs), TD-033 (peer-poke dual-channel gap).
+
+# <<< Issue #414 SOUL AMEND END
