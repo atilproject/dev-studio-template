@@ -16,6 +16,22 @@
 | **Run** | `bash scripts/tests/d983-s28-003-forward-port-parity.sh` |
 | **Cadence Rule 1 atomic** | Single-commit cluster: `scripts/claim-next-ready.sh` (+270 LOC) + `scripts/agent-watch.sh` (+1039 LOC) + `scripts/tests/d983-s28-003-forward-port-parity.sh` (new, 135 LOC) + `scripts/tests/INDEX.md` (new, this entry) |
 
+## d081 — STORY-S28-007 Auto-Verdict-By hook port ✅ ACTIVE
+
+| Field | Value |
+|---|---|
+| **Story** | [STORY-S28-007 #988](https://github.com/atilproject/AtilCalculator/issues/988) *(closes on PR merge — fill post-merge)* |
+| **Source-of-truth sister** | `atilproject/AtilCalculator/scripts/peer-poke.sh` (commit 981a9c1d, 6284B, PR #296 reference impl + ADR-0024 amendment §Path 2) |
+| **Test file** | `scripts/tests/d081-auto-verdict-by-hook.sh` |
+| **Scope (Path A per Issue #991 verdict)** | tmpl port of `peer-poke.sh` wrapper script + Auto-Verdict-By hook. Path 1 (Layer 5 YAML hook in `.github/workflows/label-check.yml`) NOT in this test — architect-owned territory per file ownership matrix. |
+| **TCs** | **5 TCs (RED-first per ADR-0044 ≥3 baseline):** TC1 peer-poke.sh.tmpl file exists + executable (6284B parity-check vs calc source); TC2 verdict-by + add-label pair invocation present (`_pair_verdict_by` function + `gh (issue\|pr) edit --add-label`); TC3 atomic pairing doctrine — `labels_to_add="cc:${role} ${verdict_by_label}"` single-line concat + `gh edit ... $labels_to_add` atomic invocation (per ADR-0015 §Sıra zorunlu + ADR-0024 §Path 2); TC4 `VERDICT_BY_DEFAULT_HOURS=24` default deadline (env-var override allowed); TC5 silent-skip idempotency on verdict-by:<ts> already present (no double-deadline overwrite, per ADR-0024 §3 + §4) |
+| **Sister-pattern** | `d296-peer-poke-helper.sh` (calc-side, source-of-truth — argument shape contract); `d081-auto-verdict-by-hook.sh` (calc-side, identical contract); ≥2 sister-pattern coverage per ADR-0049 §Sister-pattern met (d296 + d081 calc-side = 2 members) |
+| **Run** | `bash scripts/tests/d081-auto-verdict-by-hook.sh` |
+| **Cadence Rule 1 atomic** | Single-commit cluster: `scripts/peer-poke.sh.tmpl` (new, 6284B ported from `atilcan65/AtilCalculator/scripts/peer-poke.sh` 981a9c1d) + `scripts/tests/d081-auto-verdict-by-hook.sh` (new, ~150 LOC) + `scripts/tests/INDEX.md` (this entry) |
+| **Cross-references** | Issue #988 (claim), Issue #991 (design-drift + verdict — Path A approved), ADR-0024 amendment §Path 2 (Auto-Verdict-By hook contract), ADR-0015 (atomic handoff doctrine), ADR-0044 (RED-first TDD), PR #296 (calc source-of-truth peer-poke.sh impl) |
+
+---
+
 ## Path-resolution decision (STORY-S28-003 open question owner: developer)
 
 > **Decision:** Keep the literal `atilproject/AtilCalculator` references in
