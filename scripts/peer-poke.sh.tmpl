@@ -1,0 +1,135 @@
+#!/usr/bin/env bash
+# peer-poke.sh — Dual-channel peer-poke wrapper (ADR-0033, Issue #296)
+#                + Auto-Verdict-By hook (ADR-0024 amendment §Path 2, Issue #681)
+#
+# Usage:
+#   scripts/peer-poke.sh architect "[ORCH→ARCH] #289 v2 review needed"
+#   scripts/peer-poke.sh developer "[TEST→DEV] bug #320 ready for triage"
+#
+# Wraps: notify.sh -l info -w -r <role> <message>
+# Refuses to call without -w (the whole point of this script).
+#
+# WHY THIS SCRIPT EXISTS
+# ----------------------
+# Per ADR-0033 (dual-channel doctrine), waking a peer agent from tmux context
+# requires BOTH (a) a Telegram message AND (b) a tmux pane wake. Telegram-only
+# (the `notify.sh -l <role>` legacy form) is broken — peer tmux panes never
+# wake. Five agent soul files used to show the legacy form in their
+# §Peer-Poke Discipline examples, so new agents learned the wrong pattern.
+# Issue #296 closes that gap.
+#
+# This wrapper bakes the correct invocation shape (`-l info -w -r <role>`)
+# into a single helper, so the wrong form is unreachable through this entry
+# point. Sister: scripts/ping.sh — identical wrapper semantics, slightly
+# different argument-handling edges (see d038 vs d296 d-tests).
+#
+# AUTO-VERDICT-BY HOOK (ADR-0024 amendment §Path 2)
+# --------------------------------------------------
+# Sister to Layer 5 yaml hook (label-check.yml §Auto-Verdict-By hook, Path 1).
+# When a peer-poke MSG contains a target issue/PR number (#NNN), atomically
+# add a paired `verdict-by:<ts>` label (deadline = +24h, configurable via
+# VERDICT_BY_DEFAULT_HOURS env var). Idempotent: silent-skip if verdict-by:*
+# already present (no double-deadline overwrite pathology).
+#
+# Doctrinal contract (d-test d296-peer-poke-helper.sh, 3 TCs):
+#   T1: argv capture: peer-poke.sh <role> "<msg>" → notify.sh -l info -w -r <role> "<msg>"
+#   T2: missing args → exit 2 + usage to stderr
+#   T3: bash -n syntactically valid
+#
+# Doctrinal contract (d-test d081-auto-verdict-by-hook.sh, 4 TCs for peer-poke.sh):
+#   TC2: verdict-by + add-label pair invocation present
+#   TC3: atomic pairing doctrine (paired cc:* + verdict-by:* in same gh edit)
+#   TC4: VERDICT_BY_DEFAULT_HOURS=24 (default deadline +24h)
+#   TC5: silent-skip idempotency on verdict-by:<ts> already present
+#
+# Refs:
+#   - Issue #296 (peer-poke wrapper doctrine)
+#   - Issue #681 (RETRO-016 #2: ADR-0024 verdict-by missing on tester PRs)
+#   - docs/peer-poke-spec.md §Deliverable 1
+#   - ADR-0033 (dual-channel doctrine)
+#   - ADR-0024 amendment (Auto-Verdict-By Hook)
+#   - ADR-0015 (atomic handoff discipline — paired labels in single gh edit)
+#   - ADR-0044 (RED-first TDD — d081 is the contract)
+#   - CLAUDE.md §Auto-Ping Hard-Rule
+
+set -euo pipefail
+
+# Auto-Verdict-By default deadline (override via env var)
+VERDICT_BY_DEFAULT_HOURS="${VERDICT_BY_DEFAULT_HOURS:-24}"
+
+# _pair_verdict_by <issue_or_pr_number> [optional_role]
+# --------------------------------------------------
+# Auto-pairs a `verdict-by:<ts>` label on the given issue/PR alongside any
+# `cc:*` label. Idempotent: silent-skip if verdict-by:* already present.
+# Atomic per ADR-0015: both labels added in same `gh issue edit` invocation.
+_pair_verdict_by() {
+    local target="$1"
+    local role="${2:-}"
+
+    # Compute deadline = now + VERDICT_BY_DEFAULT_HOURS hours (ISO 8601 UTC)
+    local deadline
+    deadline=$(python3 -c "
+import datetime, sys
+hours = int('${VERDICT_BY_DEFAULT_HOURS}')
+print((datetime.datetime.utcnow() + datetime.timedelta(hours=hours)).strftime('%Y-%m-%dT%H:%M:%SZ'))
+" 2>/dev/null) || deadline=$(date -u -d "+${VERDICT_BY_DEFAULT_HOURS} hours" +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null) || deadline=$(date -u -v+${VERDICT_BY_DEFAULT_HOURS}H +"%Y-%m-%dT%H:%M:%SZ" 2>/dev/null) || deadline="2099-12-31T23:59:59Z"
+
+    local verdict_by_label="verdict-by:${deadline}"
+    local target_kind="issue"
+    local existing_labels
+
+    # Detect issue vs PR (try issue first, fall back to PR)
+    if existing_labels=$(gh issue view "$target" --json labels --jq '.labels[].name' 2>/dev/null) && [ -n "$existing_labels" ]; then
+        target_kind="issue"
+    elif existing_labels=$(gh pr view "$target" --json labels --jq '.labels[].name' 2>/dev/null) && [ -n "$existing_labels" ]; then
+        target_kind="pr"
+    else
+        # Neither found — skip silently (peer-poke may reference non-existent or closed item)
+        echo "silent_skip: $target not found as issue or PR" >&2
+        return 0
+    fi
+
+    # TC5 idempotency: silent-skip if verdict-by:* already present
+    if echo "$existing_labels" | grep -qE "^verdict-by:"; then
+        echo "silent_skip: $target already has verdict-by label, skipping auto-pair" >&2
+        return 0
+    fi
+
+    # TC3 atomic: paired addLabel in same gh edit invocation
+    # Build add-label args. If a role was passed, pair cc:<role> + verdict-by:<ts>;
+    # otherwise just add verdict-by:<ts> (the caller already added cc:* via their own edit).
+    local labels_to_add="$verdict_by_label"
+    if [ -n "$role" ]; then
+        labels_to_add="cc:${role} ${verdict_by_label}"
+    fi
+
+    if [ "$target_kind" = "issue" ]; then
+        # shellcheck disable=SC2086  # labels_to_add intentionally word-split for --add-label
+        gh issue edit "$target" --add-label $labels_to_add 2>/dev/null || \
+            echo "warn: failed to add verdict-by to issue $target" >&2
+    else
+        # shellcheck disable=SC2086  # labels_to_add intentionally word-split for --add-label
+        gh pr edit "$target" --add-label $labels_to_add 2>/dev/null || \
+            echo "warn: failed to add verdict-by to PR $target" >&2
+    fi
+}
+
+ROLE="${1:-}"
+shift || true
+MSG="${*:-}"
+
+if [ -z "$ROLE" ] || [ -z "$MSG" ]; then
+    echo "Usage: $0 <role> <message>" >&2
+    echo "  role: orchestrator | product-manager | architect | developer | tester" >&2
+    exit 2
+fi
+
+# Auto-Verdict-By hook (ADR-0024 amendment §Path 2)
+# Extract target issue/PR number from MSG if present (e.g., "#123", "Issue #123", "PR #123")
+TARGET=$(echo "$MSG" | grep -oE "(Issue|PR|issue|pr) #[0-9]+|#[0-9]+" | head -1 | grep -oE "[0-9]+" || true)
+if [ -n "$TARGET" ]; then
+    _pair_verdict_by "$TARGET" "$ROLE" || true
+fi
+
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+exec "$SCRIPT_DIR/notify.sh" -l info -w -r "$ROLE" "$MSG"
