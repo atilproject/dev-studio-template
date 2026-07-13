@@ -1,0 +1,64 @@
+# d050b-dispatch.yml — Behavioral workflow test framework (Issue #440, ADR-0049)
+#
+# Purpose: enable workflow_dispatch-triggered runtime validation of label-check.yml
+# Layer 5 reviewer-chain logic. 4 scenarios mirror the d-test mocks (TC2/TC3 in
+# scripts/tests/d050b-behavioral-workflow-test.sh). Owner-territory draft
+# (architect + tester authored, owner squash-merge per file ownership matrix).
+#
+# Sister-patterns:
+#   - d046 (expansion family)
+#   - d048 TC8 (Issue #448 addLabels API regression anchor, PR #450)
+#   - d049 §Framework + Issue #440 AC1-AC7
+#
+# ADR refs:
+#   - ADR-0044 (RED-first TDD)
+#   - ADR-0048 (Layer 5 type-driven reviewer chain)
+#   - ADR-0049 (d-test framework — workflow_dispatch is the runtime-validation tier)
+name: d050b behavioral dispatch
+
+on:
+  workflow_dispatch:
+    inputs:
+      basic_pull_request_labeled:
+        description: 'Scenario 1 — basic pull_request labeled event (TC2 mock)'
+        type: boolean
+        default: false
+      silent_skip_non_docs:
+        description: 'Scenario 2 — non-docs type with verdict:changes-requested → silent_skip (TC3 mock)'
+        type: boolean
+        default: false
+      cascade_strip_status_duplicates:
+        description: 'Scenario 3 — duplicate status:* labels → cascade-strip (d048 Part 1 sister)'
+        type: boolean
+        default: false
+      reversal_handler:
+        description: 'Scenario 4 — needs-tester-signoff re-added → status:ready reversal (d048 TC4 sister)'
+        type: boolean
+        default: false
+
+jobs:
+  behavioral-validation:
+    runs-on: [self-hosted, Linux, X64, atilproject]
+    if: ${{ inputs.basic_pull_request_labeled || inputs.silent_skip_non_docs || inputs.cascade_strip_status_duplicates || inputs.reversal_handler }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4 (SHA-pin per TD-028, sister-pattern ci.yml)
+
+      - name: Run d050b self-test
+        run: bash scripts/tests/d050b-behavioral-workflow-test.sh --self-test
+
+      - name: Run d048 sister-test (reversal + cascade-strip scenarios)
+        if: ${{ inputs.reversal_handler || inputs.cascade_strip_status_duplicates }}
+        run: bash scripts/tests/d048-adr-0012-status-ready-gating.sh
+
+      - name: Report scenario verdict
+        if: always()
+        run: |
+          echo "## d050b behavioral dispatch summary"
+          echo ""
+          echo "- basic_pull_request_labeled: ${{ inputs.basic_pull_request_labeled }}"
+          echo "- silent_skip_non_docs: ${{ inputs.silent_skip_non_docs }}"
+          echo "- cascade_strip_status_duplicates: ${{ inputs.cascade_strip_status_duplicates }}"
+          echo "- reversal_handler: ${{ inputs.reversal_handler }}"
+          echo ""
+          echo "Refer to scripts/tests/INDEX.md for d050b + d048 sister-pattern docs."
