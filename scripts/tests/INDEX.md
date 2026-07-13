@@ -32,6 +32,23 @@
 
 ---
 
+## s29-005 — STORY-S29-005 verify-portage script ✅ ACTIVE
+
+| Field | Value |
+|---|---|
+| **Story** | [STORY-S29-005 #1017](https://github.com/atilcan65/AtilCalculator/issues/1017) |
+| **Source-of-truth sister** | `AtilCalculator/docs/sprints/sprint-29/00-plan.md` §S29-005 + `AtilCalculator/docs/sprints/sprint-28/02-template-launcher-audit-2026-07-13.md` §4.6 (recipe source) |
+| **Test file** | `scripts/tests/s29-005-verify-portage.sh` |
+| **Production file** | `scripts/verify-portage.sh` (new, ~280 LOC, sister-pattern to dev-studio-init.sh + e2e-pilot.sh) |
+| **TCs** | **8 TCs (RED-first per ADR-0044 ≥5 baseline):** TC1 script exists at canonical path (AC1); TC2 bash -n syntax check passes; TC3 --help exits 0 + prints usage (sister-pattern to dev-studio-init.sh); TC4 --dry-run exits 0 without real gh repo create/delete calls (AC3 idempotent print-mode); TC5 --dry-run --json output is valid JSON with `category_gaps` dict (AC4); TC6 header documents `# Exit codes:` section with ≥6 codes (AC6); TC7 idempotency — two consecutive --dry-run runs both exit 0 (AC2); TC8 trap-based cleanup handler wired (`trap` + `cleanup()` function, AC1 step 5) |
+| **Sister-pattern** | `e2e-pilot.sh` (rendering workflow + idempotency note, sister-pattern #1); `dev-studio-init.sh` (helper-function conventions + --dry-run + --help flag, sister-pattern #2); `d031-claim-next-ready.sh` (atomic + idempotent patterns, Layer 2 sister); `d095-post-org-migration-clone-urls.sh` (AtilCalculator URL hygiene, Sprint 22 PIVOT origin); `d983-s28-003-forward-port-parity.sh` (S28-003 cross-tmpl sister — first sNN-pattern d-test in this INDEX); ≥2 sister-pattern coverage per ADR-0049 §Sister-pattern met (e2e-pilot + dev-studio-init = 2 members) |
+| **Run** | `bash scripts/tests/s29-005-verify-portage.sh` |
+| **Cadence Rule 1 atomic** | Single-commit cluster: `scripts/verify-portage.sh` (new, ~280 LOC) + `scripts/tests/s29-005-verify-portage.sh` (new, 8 TCs) + `scripts/tests/INDEX.md` (this entry) |
+| **Cross-references** | Issue #1017 (S29-005 tracker), Issue #1020 (cross-repo scope Q, RESOLVED 2026-07-13T09:00:16Z Option A — pattern ratified end-to-end by PR #4 + this PR), docs/sprints/sprint-29/00-plan.md §S29-005, ADR-0044 (RED-first TDD doctrinal home), ADR-0049 (d-test framework, ≥5 TCs baseline), ADR-0055 §1 Cadence Rule 1 atomic, Sister-PR: atilproject/dev-studio-launcher#4 (S29-003 cross-repo workstream precedent) |
+| **Sprint 29 cross-repo workstream pattern** | This is the SECOND cross-repo PR (after launcher#4) following Issue #1020 Option A: design lives in AtilCalculator (issue tracker #1017), impl lands here (dev-studio-template) with body anchor `Refs atilcan65/AtilCalculator#1017`. Consumer: S29-014 (orchestrator, sprint-end verification re-runs verify-portage.sh to produce concrete gap numbers). |
+
+---
+
 ## Path-resolution decision (STORY-S28-003 open question owner: developer)
 
 > **Decision:** Keep the literal `atilproject/AtilCalculator` references in
