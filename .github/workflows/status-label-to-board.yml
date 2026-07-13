@@ -40,6 +40,16 @@ permissions:
 
 jobs:
   sync-status:
+    # STORY-S29-004: disabled via `if: false` per design PR atilcan65/AtilCalculator#1026
+    # (path a — gentler than `git rm`, reversible, preserves file as documentation).
+    # Reason: workflow tried to push to a Projects v2 board that doesn't exist on
+    # the template repo (audit §3.1: status-label-to-board.yml FAIL history
+    # 2026-07-11 13:48:40-41Z). Downstream projects have their own copy rendered
+    # by dev-studio-init.sh — duplication, not addition. Reversible: remove this
+    # `if: false` line (and the comment block above) to re-enable.
+    # Sister-pattern: S29-001 (Issue #1013) migrates this file's runs-on to the
+    # self-hosted 4-tuple in a follow-up impl PR — disabled state is orthogonal.
+    if: false
     runs-on: ubuntu-latest
     steps:
       - name: Resolve label → status and update board
