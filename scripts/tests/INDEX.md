@@ -66,3 +66,18 @@
 > maintained). Future-proofing option (`${GITHUB_REPO:-atilproject/dev-studio-template}`)
 > was considered but deferred — would change behavior for existing tmpl-script
 > consumers and requires its own d-test per ADR-0044 RED-first.
+
+## s29-004 — STORY-S29-004 status-label-to-board disabled ✅ ACTIVE
+
+| Field | Value |
+|---|---|
+| **Story** | [STORY-S29-004 #1016](https://github.com/atilcan65/AtilCalculator/issues/1016) |
+| **Source-of-truth design** | [PR atilcan65/AtilCalculator#1026](https://github.com/atilcan65/AtilCalculator/pull/1026) — `docs/designs/STORY-S29-004-design.md` (path a — DISABLE via `if: false`, owner-ratified by merge) |
+| **Test file** | `scripts/tests/s29-004-status-label-to-board-disabled.sh` |
+| **Production file** | `.github/workflows/status-label-to-board.yml` (modified — `if: false` added to `sync-status` job + attribution comment) |
+| **TCs** | **7 TCs (RED-first per ADR-0044, design narrowed from ≥5 baseline because verification surface is narrow: 1 file, 1 boolean state):** TC1 file exists at canonical path (AC2: not deleted, path a preserves file); TC2 sync-status job has job-level `if: false` literal (AC2); TC3 YAML parses + `jobs.sync-status.if == False` semantically (drift defense); TC4 `runs-on: ubuntu-latest` preserved (S29-001 sister-pattern: not stripped here); TC5 STORY-S29-004 attribution comment present (regression pin); TC6 workflow name + `on:` triggers unchanged; TC7 permissions block (3 lines) preserved |
+| **Sister-pattern** | `s29-005-verify-portage.sh` (Sprint 29 cross-repo workstream pattern, identical issue-tracker-in-calc / impl-in-tmpl shape, ADR-0055 §1 Cadence Rule 1 atomic precedent); `d015-dev-idle-prevention.sh` (TC pattern, pass/fail/section idiom); `d983-s28-003-forward-port-parity.sh` (≥2 sister-pattern coverage per ADR-0049); ≥2 sister-pattern coverage met (s29-005 + d015 = 2 members) |
+| **Run** | `bash scripts/tests/s29-004-status-label-to-board-disabled.sh` |
+| **Cadence Rule 1 atomic** | Single-commit cluster: `.github/workflows/status-label-to-board.yml` (modified, +10 LOC comment + `if: false`) + `scripts/tests/s29-004-status-label-to-board-disabled.sh` (new, ~150 LOC, 7 TCs) + `scripts/tests/INDEX.md` (this entry) |
+| **Cross-references** | Issue #1016 (story), PR atilcan65/AtilCalculator#1026 (design, merged 2026-07-13T13:01:58Z), `docs/sprints/sprint-28/02-template-launcher-audit-2026-07-13.md` §3.1 + §6.2 B-06 (audit origin), ADR-0013 (status-label → board sync), ADR-0014 (PROJECT_TOKEN), TD-075 + F-08 + F-10 (silent-RED defense family), RETRO-023 (Issue #1024 — cross-repo workstream codification) |
+| **Sprint 29 cross-repo workstream pattern** | Issue tracked in `atilcan65/AtilCalculator` (#1016), impl lands here (`atilproject/dev-studio-template`). PR body anchors `Refs atilcan65/AtilCalculator#1016`. Consumer: S29-014 (orchestrator) verifies CI hygiene post-merge. Sister: S29-001 (Issue #1013, same shape, follows this PR). |
