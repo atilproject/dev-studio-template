@@ -1,0 +1,58 @@
+# Architecture Decision Records — Index
+
+This index lists every ADR the team has produced. ADRs are immutable once
+`Accepted`; superseding decisions live in a new ADR that references the old
+one in its `Supersedes` field.
+
+| ID | Title | Status | Date | Deciders | Related |
+|----|-------|--------|------|----------|---------|
+| [ADR-0010](./ADR-0010-per-project-watchers.md) | Per-Project Systemd Watchers | Accepted | 2026-06-14 | Architect | Supersedes ADR-0006 (instance topology); related to ADR-0002, ADR-0003 |
+| [ADR-0011](./ADR-0011-watcher-dropin-override.md) | Watcher Per-Instance Config via Drop-In Override | Accepted | 2026-06-14 | Architect | Refines ADR-0010 (implementation detail of per-instance config) |
+| [ADR-0012](./ADR-0012-required-label-set.md) | Required Label Set on Issue/PR Creation | Accepted | 2026-06-14 | Architect | Related to ADR-0002, ADR-0007, ADR-0009; sister of ADR-0013 |
+| [ADR-0013](./ADR-0013-status-label-to-board-sync.md) | Sync `status:*` Labels to Projects v2 Board | Accepted (auth superseded by ADR-0014) | 2026-06-14 | Architect | Related to ADR-0007; sister of ADR-0012 |
+| [ADR-0014](./ADR-0014-project-token-secret.md) | PROJECT_TOKEN repo secret for board sync workflow | Accepted | 2026-06-14 | Architect | Supersedes ADR-0013 auth section; related to ADR-0013 |
+| [ADR-0015](./ADR-0015-atomic-agent-handoff.md) | Atomic Agent Hand-off (preserve 4-cat invariant) | Accepted | 2026-06-14 | Architect | Refines ADR-0009 cc-flip; ensures ADR-0012 invariant during agent transitions |
+| [ADR-0016](./ADR-0016-public-by-default.md) | Public-by-default for bootstrapped projects | Accepted | 2026-06-17 | Architect | Related to ADR-0014 (PROJECT_TOKEN canary quota interaction) |
+| [ADR-0002](./ADR-0002-autonomy-loop.md) | Autonomy Loop (GitHub-native wake-up) | Accepted | 2026-06-21 | Architect | Sister-pattern to AtilCalculator ADR-0002; foundational for ADR-0010, ADR-0012, ADR-0013, ADR-0015, ADR-0024, ADR-0026, ADR-0038 |
+| [ADR-0038](./ADR-0038-auto-claim-protocol.md) | Auto-Claim Protocol — agents self-claim highest-priority ready item when WIP < 2 | Accepted | 2026-06-22 | Architect | Sister-pattern to AtilCalculator ADR-0038; refines ADR-0002 (claim-driven extension); related to ADR-0012, ADR-0031, ADR-0036, Issue #222 |
+| [ADR-0024](./ADR-0024-stale-verdict-watchdog-schema.md) | Stale-Verdict Watchdog Schema (`verdict-by:<ts>` labels + `stale_verdict` events) | Proposed | 2026-06-19 | Architect | Related to ADR-0002, ADR-0009, ADR-0012, ADR-0015, ADR-0020, ADR-0021 |
+| [ADR-0025](./ADR-0025-bound-standby-exception.md) | Bound Standby Exception (a) + Queue-Empty Wake | **Superseded in template** (by §Doctrine Reminder — Issue #238 / PR #40 / PR #41) | 2026-06-19 | Architect | Kept for historical traceability; canonical enforcement is the soul template §Doctrine Reminder section |
+| [ADR-0026](./ADR-0026-queue-empty-mention-check.md) | Queue-Empty Wake: @mention Check (Amendment to ADR-0025 §2) | Proposed | 2026-06-19 | Architect | Amends ADR-0025 §2; related to ADR-0002, ADR-0021, ADR-0025 |
+| [ADR-0027](./ADR-0027-deploy-automation.md) | Automatic Deploy Pipeline (GH Action on main merge → SSH pull+restart) | Proposed | 2026-06-19 | Architect | Related to ADR-0010, ADR-0014, ADR-0017, ADR-0022; ADR-0030 supersedes §Decision.1 (LAN-deploy case only) |
+| [ADR-0030](./ADR-0030-self-hosted-runner-lan-deploy.md) | Self-Hosted GitHub Runner for Private LAN Deploy | Proposed | 2026-06-19 | Architect | Supersedes ADR-0027 §Decision.1 (LAN-deploy case only); related to ADR-0027, ADR-0010, Issue #138 |
+| [ADR-0046](./ADR-0046-d-test-convention.md) | d-numbered regression test convention (`scripts/tests/dNNN-*.sh`) | Proposed | 2026-06-23 | Architect | Codifies existing pattern (AtilCalculator d006–d033); related to ADR-0002, ADR-0025, ADR-0026, Issue #198 |
+| [ADR-0047](./ADR-0047-deploy-automation-pattern.md) | Deploy automation pattern (env-driven `scripts/deploy-runner.sh` + `deploy.yml.tmpl`) | Proposed | 2026-06-25 | Architect | Sister to AtilCalculator ADR-0027 + ADR-0030; related to ADR-0046, Issue #198, Issue #375 |
+| [ADR-0058](./ADR-0058-comment-trigger-guard.md) | [RESERVED — Sprint 28] Comment-trigger guard + multi-fire prevention + stability gate | Proposed (reserved) | 2026-07-10 | Architect | Reserved per audit-baseline §20.1 ADR pre-allocation map; sister-pattern to AtilCalculator ADR-0058 |
+| [ADR-0059](./ADR-0059-cluster-squash-batch-lag.md) | [RESERVED — Sprint 28] Cluster-Squash Batch-Lag Detection Doctrine | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0059 |
+| [ADR-0060](./ADR-0060-ac-mapping-verification.md) | [RESERVED — Sprint 28] §AC Mapping Verification Doctrine (arch verdict pre-ratification AC list 1:1 mirror) | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0060 |
+| [ADR-0061](./ADR-0061-tbd.md) | [RESERVED — Sprint 28] (placeholder; topic TBD per §20.1) | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1 |
+| [ADR-0062](./ADR-0062-layer5-label-change-verdict.md) | [RESERVED — Sprint 28] §Layer 5 Label-Change Event Verdict-Gate Extension | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0062 |
+| [ADR-0063](./ADR-0063-layer4-cascade-strip-skip.md) | [RESERVED — Sprint 28] §Layer 4 Cascade-Strip Part 2.5 — Lane-Transition Skip | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0063 |
+| [ADR-0064](./ADR-0064-cross-user-env-var.md) | [RESERVED — Sprint 28] Cross-User Env Var Pattern for Self-Hosted Runner Service Management | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0064 |
+| [ADR-0065](./ADR-0065-cpython-asyncio-fix.md) | [RESERVED — Sprint 28] CPython Tool-Cache + asyncio fix (RCA INCIDENT-3 doctrinal home) | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0065 |
+| [ADR-0066](./ADR-0066-tbd.md) | [RESERVED — Sprint 28] (placeholder; topic TBD per §20.1) | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1 |
+| [ADR-0067](./ADR-0067-multi-reviewer-wake.md) | [RESERVED — Sprint 28] Multi-Reviewer Wake Doctrine — `needs-*` labels must open+close via reviewer | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0067 |
+| [ADR-0068](./ADR-0068-j4-tester-exception.md) | [RESERVED — Sprint 28] Layer 5 j.4 Tester-Author Exception Clause | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0068 |
+| [ADR-0069](./ADR-0069-form-c-race-detection.md) | [RESERVED — Sprint 28] Form C Verdict-Stamp Self-Sign-Off Race Detection | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0069 |
+| [ADR-0070](./ADR-0070-closed-diagnostic.md) | [RESERVED — Sprint 28] Closed-Event 4-cat Invariant Diagnostic for `label-check.yml` | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0070 |
+| [ADR-0071](./ADR-0071-open-diagnostic.md) | [RESERVED — Sprint 28] Open-Time Label-Strip Diagnostic for `label-check.yml` | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0071 |
+
+## Conventions
+
+- **Path**: `docs/decisions/ADR-NNNN-<slug>.md`
+- **ID**: monotonically increasing, zero-padded to 4 digits
+- **Slug**: kebab-case, short, filename-safe
+- **Status lifecycle**: Proposed → Accepted → (optionally) Superseded by ADR-MMMM
+- **Header**: every ADR starts with `# ADR-NNNN: <title>` followed by a YAML-style frontmatter block (Status, Date, Deciders, Supersedes, Related)
+- **Regression tests**: `scripts/tests/dNNN-<slug>.sh` per [ADR-0046](./ADR-0046-d-test-convention.md) — 3-digit monotonic number, kebab-case slug, self-contained bash, standalone runnable. See `scripts/README.md` §d-test convention for the body skeleton.
+- **Deploy automation**: `scripts/deploy-runner.sh` + `.github/workflows/deploy.yml.tmpl` per [ADR-0047](./ADR-0047-deploy-automation-pattern.md) — 4 required env vars (SERVICE_NAME, MODULE_PATH, DEPLOY_PORT, HEALTHZ_PATH) + 1 optional (PROD_HOSTNAME), nohup+setsid restart, RCA-12 cross-user port checks, smoke test + auto-rollback. See `scripts/README.md` §deploy-runner for the env-var table.
+
+- **Path**: `docs/decisions/ADR-NNNN-<slug>.md`
+- **ID**: monotonically increasing, zero-padded to 4 digits
+- **Slug**: kebab-case, short, filename-safe
+- **Status lifecycle**: Proposed → Accepted → (optionally) Superseded by ADR-MMMM
+- **Header**: every ADR starts with `# ADR-NNNN: <title>` followed by a YAML-style frontmatter block (Status, Date, Deciders, Supersedes, Related)
+
+## Pending proposals
+
+_(none — backlog of future-work items lives in each ADR's "Future work" / "Out of scope" section.)_
