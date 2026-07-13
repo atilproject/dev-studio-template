@@ -1,8 +1,15 @@
 name: Agent Stall
 description: Agent takıldı, ilerleyemiyor
 title: "[Stall] "
-labels: ["agent-stall", "agent:human", "status:blocked"]
+labels: ["agent-stall", "type:incident", "agent:human", "status:blocked", "cc:human"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        > **ADR-0012 4-cat invariant:** Bu issue `type:*` + `agent:*` + `status:*` + `cc:*` olmak üzere 4 label kategorisi taşır.
+        > - `agent:human` (sahibi), `status:blocked`, `type:incident` pre-fill edilmiş
+        > - `cc:human` agent stalled → owner merge gate (per ADR-0012 4-cat, ADR-0031 owner-merge-gate)
+        > - **Ownership rule (Issue #113):** Labels are the source of truth for current ownership. `agent:*` label = active queue. Body text informational, may be stale after handoff.
   - type: dropdown
     id: agent
     attributes:
