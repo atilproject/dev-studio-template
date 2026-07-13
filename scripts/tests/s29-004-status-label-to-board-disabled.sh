@@ -25,9 +25,9 @@
 #   T1:  file exists at canonical path (AC2: file present, not deleted)
 #   T2:  sync-status job has `if: false` literal on the job-level line (AC2)
 #   T3:  YAML is parseable by Python yaml.safe_load (no syntax drift, AC2)
-#   T4:  runs-on: ubuntu-latest preserved (S29-001 sister-pattern: not stripped
-#        in this PR; S29-001 migrates in a follow-up — disabled state is
-#        orthogonal)
+#   T4:  runs-on: key preserved (any value — post-S29-001 rebase this file
+#        uses 4-tuple; if: false makes runs-on moot anyway; invariant is that
+#        the runs-on key is present, not its specific value)
 #   T5:  STORY-S29-004 attribution comment present (regression pin)
 #   T6:  workflow name + on: triggers unchanged (no accidental rename / event
 #        removal)
@@ -120,14 +120,18 @@ else
 fi
 
 # ============================================================================
-# T4: runs-on: ubuntu-latest preserved
+# T4: runs-on: key preserved (any value)
 # ============================================================================
-section "T4: runs-on: ubuntu-latest preserved (S29-001 sister-pattern: not stripped here)"
-if grep -Eq '^\s+runs-on:\s+ubuntu-latest\s*$' "$WF_FILE"; then
-  pass "runs-on: ubuntu-latest still present on sync-status job"
+section "T4: runs-on: key preserved on sync-status job (any value)"
+# Post-S29-001 rebase: this file uses runs-on: [self-hosted, Linux, X64, atilproject].
+# The S29-004 invariant is that runs-on key is present (not its specific value),
+# since if: false makes runs-on moot anyway. S29-001 owns the migration value.
+if grep -Eq '^\s+runs-on:\s+' "$WF_FILE"; then
+  RUNS_ON_VAL=$(grep -E '^\s+runs-on:' "$WF_FILE" | head -1 | sed -E 's/^\s+runs-on:\s*//')
+  pass "runs-on key present on sync-status job (value: $RUNS_ON_VAL)"
 else
-  fail "runs-on: ubuntu-latest missing or drifted" \
-       "S29-001 migrates to 4-tuple in a follow-up PR; this PR must NOT change runs-on"
+  fail "runs-on key missing on sync-status job" \
+       "expected at least one runs-on: line under sync-status"
 fi
 
 # ============================================================================

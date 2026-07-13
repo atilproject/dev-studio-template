@@ -40,7 +40,7 @@ permissions:
 
 jobs:
   sync-status:
-    # STORY-S29-004: disabled via `if: false` per design PR atilcan65/AtilCalculator#1026
+# STORY-S29-004: disabled via `if: false` per design PR atilcan65/AtilCalculator#1026
     # (path a — gentler than `git rm`, reversible, preserves file as documentation).
     # Reason: workflow tried to push to a Projects v2 board that doesn't exist on
     # the template repo (audit §3.1: status-label-to-board.yml FAIL history
@@ -49,8 +49,11 @@ jobs:
     # `if: false` line (and the comment block above) to re-enable.
     # Sister-pattern: S29-001 (Issue #1013) migrates this file's runs-on to the
     # self-hosted 4-tuple in a follow-up impl PR — disabled state is orthogonal.
+    # The runs-on below is the S29-001 4-tuple migration (was: ubuntu-latest).
+    # Disabled via if: false above, so the runs-on has no runtime effect, but
+    # keeps file consistent with sibling workflow files post-S29-001 migration.
     if: false
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64, atilproject]
     steps:
       - name: Resolve label → status and update board
         uses: actions/github-script@v7
