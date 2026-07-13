@@ -121,7 +121,6 @@
 ---
 
 ## s29-009 — STORY-S29-009 forward-port 3 scripts/ sub-dirs ✅ ACTIVE
-
 | Field | Value |
 |---|---|
 | **Story** | [STORY-S29-009 #1034](https://github.com/atilcan65/AtilCalculator/issues/1034) (Sprint 29 Wave 2, P1, dev lane — scripts/ owner) |

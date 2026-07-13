@@ -1,8 +1,15 @@
 name: Bug Report
 description: Hata veya beklenmedik davranış
 title: "[Bug] "
-labels: ["type:bug", "status:backlog"]
+labels: ["type:bug", "status:backlog", "agent:developer", "cc:developer"]
 body:
+  - type: markdown
+    attributes:
+      value: |
+        > **ADR-0012 4-cat invariant:** Bu issue `type:*` + `agent:*` + `status:*` + `cc:*` olmak üzere 4 label kategorisi taşır.
+        > - `type:bug` + `agent:developer` + `cc:developer` pre-fill edilmiş (tester veya kullanıcı tarafından report edildikten sonra developer'a devredilir)
+        > - `status:backlog` → `status:in-progress` (developer claim edince, ADR-0038 auto-claim)
+        > - **Ownership rule (Issue #113):** Labels are the source of truth for current ownership. The owning agent is whoever has `agent:<role>` on this issue. If you (as the bug reporter) are not the owner, the assigned role will pick it up via agent-watch.sh wake events.
   - type: textarea
     id: description
     attributes:

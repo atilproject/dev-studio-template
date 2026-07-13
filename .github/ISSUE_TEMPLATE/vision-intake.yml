@@ -1,7 +1,7 @@
 name: Vision Intake
 description: Yeni projenin vizyonu — PM bunu alıp epic'lere kıracak (proje başında bir kez)
 title: "[Vision] "
-labels: ["agent:product-manager", "type:vision", "status:backlog"]
+labels: ["agent:product-manager", "cc:product-manager", "type:vision", "status:backlog"]
 body:
   - type: markdown
     attributes:
@@ -9,6 +9,10 @@ body:
         ## Vision Intake
         Bu form proje başlangıcında **bir kez** doldurulur. PM bunu okuyup Architect'e devreder, sonra epic'lere böler.
         Detaylı olman gerekmiyor — PM eksikleri sana soracak. Ama net olmaya çalış.
+
+        > **ADR-0012 4-cat invariant:** Bu issue `type:*` + `agent:*` + `status:*` + `cc:*` olmak üzere 4 label kategorisi taşır.
+        > - `agent:product-manager` + `cc:product-manager` pre-fill edilmiş (PM owns vision intake)
+        > - **Ownership rule (Issue #113):** Labels are the source of truth for current ownership. Body text informational.
 
   - type: textarea
     id: vision_statement

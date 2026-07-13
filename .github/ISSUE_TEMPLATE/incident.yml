@@ -1,12 +1,17 @@
 name: Production Incident
 description: Acil canlı sistem sorunu
 title: "[INCIDENT] "
-labels: ["type:incident", "priority:P0", "agent:human"]
+labels: ["type:incident", "priority:P0", "agent:human", "status:in-progress", "cc:human"]
 body:
   - type: markdown
     attributes:
       value: |
         ⚠️ **Bu template canlı sistem sorunları içindir. Sıradan bug için "Bug Report" kullan.**
+
+        > **ADR-0012 4-cat invariant:** Bu issue `type:*` + `agent:*` + `status:*` + `cc:*` olmak üzere 4 label kategorisi taşır.
+        > - `type:incident` + `agent:human` + `cc:human` pre-fill edilmiş (owner owns incident response)
+        > - `status:in-progress` (incident aktif), `priority:P0` default
+        > - **Ownership rule (Issue #113):** Labels are the source of truth for current ownership. `agent:human` = owner merge gate / escalation channel. Body text informational.
 
   - type: textarea
     id: summary
