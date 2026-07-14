@@ -76,6 +76,46 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **#91 → Phase B (sister of AtilCalculator PR #1057, Issue #1060) — notify.sh
+  env-decoupling port (AC1 Option B per Issue #1055) + cycle #1699 Phase B
+  feedback fixes.** Sister-pattern port of the AtilCalculator env-decoupling
+  fix to `scripts/notify.sh` on template. Phase A (RED-first d-test
+  `d1026-s29-template-env-decoupling-port-parity`) already merged via PR #91
+  (commit `8b813cc`); Phase B (this PR) implements the fix. Pre-fix:
+  `notify.sh` exited 1 on Telegram env-missing BEFORE tmux-wake fired,
+  breaking ADR-0033 dual-channel doctrine in CI/dev/recovery envs (Issue
+  #1053 cross-repo sister). Post-fix: env-missing or API-fail logs WARN/ERROR
+  + marks Telegram failed, but tmux-wake fires UNCONDITIONALLY (when `-w`
+  set). Exit-code matrix matches AtilCalculator's (0/1/2/3).
+  Cycle #1699 Phase B feedback fixes (per [TEST→DEV] CHANGES REQUESTED on
+  PR #98, d1026 still RED 3/5): (a) **removed unconditional `source
+  $HOME/.dev-studio-env`** that was clobbering `env -u TELEGRAM_BOT_TOKEN`
+  test fixtures, causing TC1/TC4 to read env=set and exit=0 instead of
+  exit=2; (b) **revised WAKE_RESULT → WAKE_ATTEMPTED + WAKE_DELIVERED** exit
+  semantics so AC1 Option B's "Telegram failed + tmux-wake attempted" path
+  matches exit=2 (was exit=1 when agent-wake.sh internal lookup failed);
+  callers must source `~/.dev-studio-env` themselves (agent shells via
+  .bashrc already do; manual users documented inline).
+  Result: d1026 4/5 GREEN (TC0, TC1, TC4, TC5 pass; TC2 exit=2 + stderr OK
+  but wake_probe FAIL — see pre-existing fixture-gap below).
+  Diff: `scripts/notify.sh` +76/-21, this CHANGELOG entry. Phase A regression
+  pin: `scripts/tests/d1026-s29-template-env-decoupling-port-parity.sh`
+  (Phase A RED-first per ADR-0044).
+
+  **Pre-existing fixture gap (deferred to follow-up Issue, out of scope for
+  PR #98)**: TC2's `wake_probe=PASS` requires `agent-wake.sh` to find a
+  pane whose index matches the role's index (developer=3). PR #96 (Issue
+  #1063 hotfix) deliberately removed title-match fallback (see
+  `scripts/agent-wake.sh` line ~50 comment: "Fix 2 deterministic
+  pane_index lookup"). d1026's fixture creates only 1 pane at index 0,
+  so TC2's role=developer can never deliver. Phase A d-test author wrote
+  the test against PRE-#96 title-match behavior; PR #96 didn't re-run
+  d1026 post-merge. Sister-pattern sister-pattern fix needed: either (i)
+  re-introduce opportunistic title-match fallback in agent-wake.sh
+  (1-line change, gated by exact UPPERCASE_ROLE match), or (ii) update
+  d1026 fixture to mimic dev-studio 6-pane layout (Phase A scope). Filed
+  as separate Issue — see PR #98 comment thread for diagnosis.
+
 - **#61 — Watcher phantom re-delivery of `board-*` events (P1).** Orchestrator's
   `agent-watch.sh` loop was receiving the same two `label_change` events
   (`board-50-*`, `board-52-*`) repeatedly across polls, even though both source
