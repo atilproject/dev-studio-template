@@ -17,6 +17,8 @@
 #   TC3: atomic pairing doctrine — paired cc:<role> + verdict-by:<ts> in same gh edit
 #   TC4: VERDICT_BY_DEFAULT_HOURS=24 (default deadline = +24h)
 #   TC5: silent-skip idempotency on verdict-by:<ts> already present (no double-deadline overwrite)
+#   TC6: gh-label-create pre-flight guard (Issue #1070) — pre-create verdict-by label if absent
+#        in repo catalog before `gh issue/pr edit --add-label`, with `--force` for idempotency.
 #
 # Scope notes (per architect verdict on Issue #991, Path A approval):
 #   - This d-test covers PATH 2 only (peer-poke.sh agent-side helper).
@@ -151,6 +153,29 @@ if ! grep -Eq 'verdict-by:.*already|silent_skip.*verdict-by|grep.*verdict-by' "$
   fail "silent-skip idempotency check missing" "expected 'grep verdict-by' on existing labels with early-return branch (ADR-0024 §3 + §4)"
 else
   pass "silent-skip idempotency present (verdict-by:<ts> already-set → no overwrite)"
+fi
+
+# ============================================================================
+# TC6: gh-label-create pre-flight guard (Issue #1070)
+# ============================================================================
+section "TC6: gh label create pre-flight guard (Issue #1070 silent-failure fix)"
+# Per Issue #1070: gh CLI refuses to add labels that don't exist in the repo's
+# label catalog (returns "label not found"). peer-poke.sh's verdict-by auto-pair
+# silently failed every invocation where the deadline timestamp was new (label
+# had never been seen in the repo). Fix: peer-poke.sh must `gh label create`
+# the verdict-by:<ts> label BEFORE `gh (issue|pr) edit --add-label`, with
+# `--force` for idempotency on subsequent calls.
+#
+# Probe: both `gh label view` (presence check) AND `gh label create` (creation)
+# must be present in peer-poke.sh. The view call guards against unnecessary
+# create attempts; the create call is what actually populates the catalog.
+LABEL_VIEW_GUARD=$(grep -cE 'gh label view' "$TARGET" || true)
+LABEL_CREATE_GUARD=$(grep -cE 'gh label create' "$TARGET" || true)
+LABEL_FORCE_GUARD=$(grep -cE -- '--force' "$TARGET" || true)
+if [ "$LABEL_VIEW_GUARD" -ge 1 ] && [ "$LABEL_CREATE_GUARD" -ge 1 ] && [ "$LABEL_FORCE_GUARD" -ge 1 ]; then
+  pass "gh label view + gh label create + --force pre-flight guard present (view=$LABEL_VIEW_GUARD, create=$LABEL_CREATE_GUARD, force=$LABEL_FORCE_GUARD)"
+else
+  fail "gh label create pre-flight guard absent" "expected 'gh label view' (presence check) + 'gh label create' (creation) + '--force' (idempotency) in peer-poke.sh before gh (issue|pr) edit --add-label per Issue #1070 fix"
 fi
 
 # ============================================================================
