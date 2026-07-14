@@ -1,0 +1,119 @@
+name: Lint & Test (d-tests)
+
+# =============================================================================
+# S29-010 themed impl PR (PR-B/4) — DEV STUDIO TEMPLATE ADAPTATION
+#
+# Source: AtilCalculator .github/workflows/lint-and-test.yml (sister-pattern)
+# Design: PR #1047 squash-merged d0cf929 (S29-010, AC1.2)
+#
+# ADAPTATION RATIONALE (vs verbatim port):
+#   AtilCalculator source references d058-claim-wip-workstream.sh (Sprint 14
+#   baseline) and d064-cluster-lag.sh (Sprint 18 baseline). Neither exists in
+#   the dev-studio-template scripts/tests/ inventory. To preserve workflow
+#   functional structure (CI gate pattern + 4-tuple + SHA-pin + permissions)
+#   while keeping the workflow green in template CI, this PR substitutes the
+#   two test references with template-appropriate sisters:
+#     - d058 (work-stream awareness) → d031-claim-next-ready.sh (10 TCs,
+#       ADR-0038 §Layer 2 + §Work-Stream Awareness amendment sister-pattern)
+#     - d064 (cluster-squash post-event guard) → dreg-post-restart-label-guard.sh
+#       (10 TCs, sister-pattern: post-event hygiene — squash vs restart both
+#       trigger label drift regression)
+#
+# DOWNSTREAM ADAPTATION NOTE:
+#   When a downstream project bootstraps from this template and wants the
+#   AtilCalculator-style d058/d064 d-tests, they should:
+#     1. Forward-port scripts/tests/d058-claim-wip-workstream.sh + d064 from
+#        AtilCalculator (sister-pattern: S29-009 forward-port cluster)
+#     2. Update the run: lines below to invoke them instead of d031/dreg
+#   Until then, d031/dreg are template-appropriate substitutes.
+#
+# 9-Lens coverage (per ADR-0045):
+#   - lens (h): SHA pin all actions/* — actions/checkout pinned to v4 SHA
+#     matching ci.yml + label-check.yml (sister-pattern SHA `34e1148...`).
+#   - lens (i): 8 sub-categories applied — see step-level comments below.
+# =============================================================================
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  d-test-d031:
+    name: d031 — claim-next-ready work-stream awareness (template sister)
+    runs-on: [self-hosted, Linux, X64, atilproject]
+
+    # 9-Lens (i) sub-categories applied (sister-pattern to source):
+    #   1. trigger — push to main + PR to main (mirrors ci.yml semantics)
+    #   2. timeout — default 60s per d-test (ADR-0049 §timeout budget)
+    #   3. permissions — minimal (contents: read only)
+    #   4. concurrency — implicit (no cancel-in-progress; conservative)
+    #   5. secrets — none required (d031 runs offline with fake-gh factory)
+    #   6. network — none (d031 uses FAKE_* env vars, no GitHub API calls in CI)
+    #   7. artifact upload — none (d031 self-reports PASS/FAIL count via stdout)
+    #   8. Layer 5 race awareness — d031 is a CI guard, NOT a status:ready
+    #       auto-promote trigger (per ADR-0053 codification; sister-pattern
+    #       to d015/d052/d054).
+
+    steps:
+      - name: Checkout
+        # SHA-pinned per ADR-0043 lens (h) — same SHA as ci.yml + label-check.yml
+        # to minimize supply-chain surface (defense in depth against tag
+        # reassignment). v4 = 34e114876b0b11c390a56381ad16ebd13914f8d5.
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Run d031 d-test (claim-next-ready work-stream awareness)
+        # Sister-pattern to d058 (AtilCalculator Sprint 14 baseline, 9 TCs).
+        # d031 = 10 TCs per ADR-0044 RED-first TDD discipline:
+        #   TC1 priority sort + TC2 age tie-break + TC3 dep parser +
+        #   TC4 WIP cap + TC5-TC7 NEW work-stream tie-break/negative/dep filter
+        #   sister-patterns + TC8-TC9 usage/invalid role → exit 2 +
+        #   TC10 audit log written on claim.
+        #
+        # *** --self-test flag passes through to d031 contract (script
+        # accepts arg or no-arg; we pass --self-test explicitly per sister
+        # source pattern for explicit self-test contract).
+        run: bash scripts/tests/d031-claim-next-ready.sh --self-test
+
+  d-test-dreg:
+    name: dreg — post-restart-label-guard (template sister to d064)
+    runs-on: [self-hosted, Linux, X64, atilproject]
+
+    # 9-Lens (i) sub-categories applied (sister-pattern to source):
+    #   1. trigger — push to main + PR to main (mirrors d031 + ci.yml)
+    #   2. timeout — default 60s per d-test (ADR-0049 §timeout budget)
+    #   3. permissions — minimal (contents: read only)
+    #   4. concurrency — implicit (no cancel-in-progress; conservative)
+    #   5. secrets — none required (dreg runs offline, no GitHub API calls)
+    #   6. network — none (dreg uses filesystem + grep; CI-isolated)
+    #   7. artifact upload — none (dreg self-reports PASS/FAIL count via stdout)
+    #   8. Layer 5 race awareness — dreg is a CI guard, NOT a status:ready
+    #       auto-promote trigger (per ADR-0053 codification; sister-pattern
+    #       to d015/d031/d052/d054).
+
+    steps:
+      - name: Checkout
+        # SHA-pinned per ADR-0043 lens (h) — same SHA as d031 + ci.yml +
+        # label-check.yml to minimize supply-chain surface (defense in depth
+        # against tag reassignment). v4 = 34e114876b0b11c390a56381ad16ebd13914f8d5.
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Run dreg d-test (post-restart-label-guard)
+        # Sister-pattern to d064 (AtilCalculator Sprint 18, cluster-squash
+        # post-event guard). Both are "post-event hygiene" d-tests: d064
+        # guards post-PR-squash window for cluster_lag, dreg guards post-
+        # watcher-restart window for label drift.
+        #
+        # dreg = 10 TCs per ADR-0044 RED-first TDD discipline (file exists,
+        # executable, --dry-run, invalid arg rejection, allowlist contains
+        # only restart-stable labels with NO cc:* or needs:* workflow state,
+        # systemd ExecStartPost= wired, idempotency structural invariant,
+        # etc.).
+        #
+        # *** --self-test flag passes through to dreg contract (script
+        # accepts arg or no-arg; we pass --self-test explicitly).
+        run: bash scripts/tests/dreg-post-restart-label-guard.sh --self-test
