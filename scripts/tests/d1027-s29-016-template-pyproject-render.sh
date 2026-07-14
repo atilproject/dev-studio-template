@@ -3,31 +3,39 @@
 # CRITICAL BLOCKER d-test. Verifies that `dev-studio-template` ships
 # pyproject.toml.tmpl + LICENSE.tmpl + .template-version.tmpl and that
 # `dev-studio-init.sh` renders all 3 to final files idempotently (AC1-AC4
-# of Issue #1075). Sister-pattern to ADR-0050 `.claude/CLAUDE.md.tmpl`
-# render path + ADR-0055 §1 Cadence Rule 1 atomic + ADR-0044 RED-first.
+# of Issue #1075). Sister-pattern to the existing .claude/CLAUDE.md.tmpl
+# render line in scripts/dev-studio-init.sh; doctrinal home is template-side
+# ADR-0046 (d-test convention) + ADR-0049 (d-test framework) + ADR-0040
+# (cross-repo-pr-auto-close, bridges `Closes atilcan65/AtilCalculator#N`
+# syntax). Calc-side doctrinal ancestors: ADR-0044 (RED-first TDD) +
+# ADR-0055 §1 (Cadence Rule 1 atomic) + ADR-0045 (9-Lens) — cited only for
+# cross-reference, NOT as live template-side ADRs (they don't exist here).
+# ADR-0050 (pre-merge-4-cat-verification) + ADR-0057 (closes-anchor-guard)
+# are NOT the render-path / cross-repo-anchor doctrines (NIT-1 arch review).
 #
 # Doctrinal contract (≥5 TCs baseline per ADR-0049 +
 #   `docs/sprints/current/plan.md` "≥5 TCs behavioral, ≥3 TCs hygiene/docs"):
 #   TC0: bash -n syntactic self-check (preflight, PASS pre/post — test file exists)
 #   TC1: AC1 + AC2 + AC3 — pyproject.toml.tmpl + LICENSE.tmpl + .template-version.tmpl
-#        all exist at the template root (peer to .claude/CLAUDE.md.tmpl per ADR-0050)
+#        all exist at the template root (sister-pattern to .claude/CLAUDE.md.tmpl
+#        render line in dev-studio-init.sh; ADR-0046 d-test convention applies)
 #   TC2: AC1 — pyproject.toml.tmpl is PEP 621-parseable via Python tomllib (after
-#        substituting {{...}} placeholders with sane defaults)
+#        substituting {{...}} placeholders with sane defaults; static validation only
+#        — sister-pattern to d1020 S29-010 workflow port-parity TOML parse)
 #   TC3: AC2 — LICENSE.tmpl contains "MIT License" + Copyright year placeholder
 #        + (owner name) placeholder per Issue #1075 AC2 + owner directive #6 (MIT default)
-#   TC4: AC3 — .template-version.tmpl contains semver (e.g., 2.1.207) matching
-#        `2.X.Y` regex (at-least-3 segments numeric, no leading `v`, no pre-release
-#        suffix to keep idempotent re-renders stable)
+#   TC4: AC3 — .template-version.tmpl contains STRICT semver (e.g., 2.1.207)
+#        matching `^[0-9]+\.[0-9]+\.[0-9]+$` regex (no pre-release/build suffix
+#        per AC3 idempotency constraint — NIT-4 divergence from d320's looser regex
+#        is intentional, see NIT-4 commit message)
 #   TC5: AC4 — `bash dev-studio-init.sh --dry-run` reports it WOULD render the
 #        3 template files to their final paths (idempotent sister to .claude/
-#        CLAUDE.md.tmpl render path per ADR-0050; re-running with already-rendered
-#        outputs is a no-op, not an error)
-#   TC6: AC5(d) — After rendering with `bash dev-studio-init.sh --dry-run`
-#        NORMALIZED against current AtilCalculator's pyproject.toml, the
-#        normalized content is installable (Python tomllib.parse round-trips
-#        it without errors, [project] table present, no orphan placeholders)
-#        Sister to AC5(d) dry-run `pip install -e .[dev]` but uses static
-#        validation only (no pip execution — idempotent + CI-friendly)
+#        CLAUDE.md.tmpl render line in dev-studio-init.sh; re-running with
+#        already-rendered outputs is a no-op, not an error)
+#   TC6: AC5(d) — template source (pyproject.toml.tmpl) with {{...}} → PLACEHOLDER
+#        substitution passes static installable validation (sister to AC5(a)
+#        `pip install -e .[dev]` but static only — idempotent + CI-friendly;
+#        NIT-3 fix: header now matches body, no rendered-output claim)
 #
 # Doctrinal home: Issue #1075 (S29-016, P0 CRITICAL BLOCKER, arch scope
 #   sign-off posted cmt IC_kwDOS9WE8s8AAAABKHG1LA) + Sprint 29 W2B+ plan
@@ -46,15 +54,17 @@
 # drift-prevention marker (S21-007 doctrine). Arch v3 audit §C Gap 1
 # confirms this is CRITICAL BLOCKER.
 #
-# RED-first per ADR-0044: pre-impl on current template main, all 5 TC fail
-#   (TC1: 3/3 files absent; TC2: parse fails on missing file; TC3: MIT text
-#   absent; TC4: semver absent; TC5: --dry-run does NOT list the 3 files).
-#   Post-impl (when arch lands pyproject.toml.tmpl + LICENSE.tmpl +
-#   .template-version.tmpl + idempotent render path): all 5 TC GREEN.
+# RED-first per ADR-0046 (d-test convention, template-side) + ADR-0049
+# (d-test framework, template-side): pre-impl on current template main,
+# all 6 substantive TC fail (TC1: 3/3 files absent; TC2: parse fails on
+# missing file; TC3: MIT text absent; TC4: semver absent; TC5: --dry-run
+# does NOT list the 3 files; TC6: source pyproject.toml.tmpl absent).
+# Post-impl (when arch lands pyproject.toml.tmpl + LICENSE.tmpl +
+# .template-version.tmpl + idempotent render path): all 7 TC GREEN.
 #
-# Cadence Rule 1 atomic (ADR-0055 §1): this d-test file + INDEX.md entry +
-#   docs/test-plans/STORY-S29-016-pyproject-tmpl-render-tests.md all land
-#   in same commit cluster per ADR-0059 cluster-squash.
+# Cadence Rule 1 atomic per ADR-0049 (d-test framework): this d-test file
+# + INDEX.md entry + docs/test-plans/STORY-S29-016-pyproject-tmpl-render-tests.md
+# all land in same commit cluster per ADR-0059 cluster-squash.
 #
 # Sister-patterns (≥3 per ADR-0049):
 #   - d1026 (S29-template env-decoupling-port-parity) — direct sister,
@@ -70,7 +80,9 @@
 #
 # Exit codes: 0 = all pass; 1 = at least one TC fail.
 # Run: bash scripts/tests/d1027-s29-016-template-pyproject-render.sh
-# Self-test: bash scripts/tests/d1027-s29-016-template-pyproject-render.sh --self-test
+# Note: this script has no --self-test flag (NIT-2 from arch 9-Lens PR #104 review).
+#       TC0 preflight (bash -n) IS the self-test — it validates syntax at the top of
+#       every run before substantive TCs execute. Header line kept minimal per NIT-2.
 
 set -uo pipefail
 
@@ -189,10 +201,14 @@ section "TC4: AC3 — .template-version.tmpl contains semver"
 if [ -f "$TMPL_VERSION" ]; then
   # Semver regex: <digit>.<digit>.<digit> with optional pre-release; strip whitespace
   version=$(tr -d '[:space:]' < "$TMPL_VERSION" 2>/dev/null)
-  if printf '%s' "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+([+-][a-zA-Z0-9.-]+)?$'; then
-    pass ".template-version.tmpl contains semver ($version)"
+  # AC3 explicitly forbids pre-release suffix (e.g. -rc1, +build.5) to keep idempotent
+  # re-renders stable per NIT-4. Tightened regex: strict 3-segment numeric semver only.
+  # (d320 sister uses looser regex for date tolerance; d1027 sister divergence is
+  # intentional — AC3 stability constraint is stricter than d320's tolerance window.)
+  if printf '%s' "$version" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+    pass ".template-version.tmpl contains strict semver ($version) per AC3 idempotency"
   else
-    fail ".template-version.tmpl does not contain valid semver" "expected semver 'X.Y.Z' (or X.Y.Z-pre); got: '$version' — see Issue #1075 AC3"
+    fail ".template-version.tmpl does not contain strict semver" "expected strict 3-segment numeric semver 'X.Y.Z' (no pre-release/build suffix per AC3 idempotency); got: '$version' — see Issue #1075 AC3"
   fi
 else
   fail ".template-version.tmpl absent (skipped)" "Issue #1075 AC3 — .template-version.tmpl must exist at template root"
@@ -229,7 +245,10 @@ else
 fi
 
 # ----------------------------------------------------------------------------
-# TC6: rendered output is installable pyproject (static validation, AC5(d))
+# TC6: template source (pyproject.toml.tmpl) with {{...}} → PLACEHOLDER substitution
+#      passes static installable validation (sister to AC5(a) `pip install -e .[dev]`,
+#      static-only — idempotent + CI-friendly; validates PEP 621 name + version +
+#      dependencies, no orphan placeholders in critical fields per AC5(d))
 # ----------------------------------------------------------------------------
 section "TC6: AC5(d) — rendered output passes static installable validation"
 if [ -f "$TMPL_PYPROJECT" ]; then
@@ -281,7 +300,7 @@ printf "  FAIL: %d\n" "$FAIL"
 printf "  Target tested: Issue #1075 (S29-016) — pyproject.toml.tmpl + LICENSE.tmpl + .template-version.tmpl render path\n"
 
 if [ "$FAIL" -gt 0 ]; then
-  printf "\n${R}RED state${D} — pre-impl template main has missing templates + missing render path. Arch scope sign-off received (cmt IC_kwDOS9WE8s8AAAABKHG1LA); impl PR BLOCKED on this RED-first d-test per ADR-0044.\n"
+  printf "\n${R}RED state${D} — pre-impl template main has missing templates + missing render path. Arch scope sign-off received (cmt IC_kwDOS9WE8s8AAAABKHG1LA); impl PR BLOCKED on this RED-first d-test per ADR-0046 (template-side doctrinal home) + ADR-0044 (calc-side doctrinal home for RED-first TDD).\n"
   exit 1
 else
   printf "\n${G}GREEN state${D} — all 5 TCs pass; arch impl landed pyproject.toml.tmpl + LICENSE.tmpl + .template-version.tmpl + idempotent render path. AC5(d) static validation confirms installability per Issue #1075.\n"
