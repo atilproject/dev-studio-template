@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# d1025-s29-template-env-decoupling-port-parity.sh — S29 ping-env-decoupling
+# d1026-s29-template-env-decoupling-port-parity.sh — S29 ping-env-decoupling
 # cross-repo port-parity regression guard (template side).
 #
 # Doctrinal contract (≥5 TCs baseline per ADR-0049 + `docs/sprints/current/plan.md`
@@ -36,7 +36,7 @@
 #
 # This d-test is the cross-repo port-parity regression guard: it runs the
 # same 5 TCs as d1024 against tmpl's scripts/. Pre-port, the same TCs that
-# RED'd on calc's d1024 pre-PR-#1057 will RED on tmpl's d1025 (parity-by-
+# RED'd on calc's d1024 pre-PR-#1057 will RED on tmpl's d1026 (parity-by-
 # RED). Post-port (when tmpl's notify.sh receives the same AC1 Option B
 # fix), all 5 TCs GREEN — proving tmpl caught up to calc.
 #
@@ -90,11 +90,11 @@ set -euo pipefail
 # the target role's uppercase name (so agent-wake.sh's title-match
 # path resolves on first match — see agent-wake.sh line ~50-58).
 
-SCRIPT_DIR_D1025="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-REPO_ROOT_D1025="$(cd "${SCRIPT_DIR_D1025}/../.." && pwd)"
-NOTIFY_SH="${REPO_ROOT_D1025}/scripts/notify.sh"
-PEER_POKE_SH="${REPO_ROOT_D1025}/scripts/peer-poke.sh.tmpl"  # tmpl uses .tmpl suffix
-AGENT_WAKE_SH="${REPO_ROOT_D1025}/scripts/agent-wake.sh"
+SCRIPT_DIR_D1026="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+REPO_ROOT_D1026="$(cd "${SCRIPT_DIR_D1026}/../.." && pwd)"
+NOTIFY_SH="${REPO_ROOT_D1026}/scripts/notify.sh"
+PEER_POKE_SH="${REPO_ROOT_D1026}/scripts/peer-poke.sh.tmpl"  # tmpl uses .tmpl suffix
+AGENT_WAKE_SH="${REPO_ROOT_D1026}/scripts/agent-wake.sh"
 
 # PASS / FAIL counters
 pass=0
@@ -191,7 +191,7 @@ fi
 # -------------------------------------------------------------------------
 echo ""
 echo "TC1: TELEGRAM_BOT_TOKEN unset → notify.sh exit 2 + tmux-wake"
-SESSION_TC1="d1025-tc1-$$"
+SESSION_TC1="d1026-tc1-$$"
 create_fake_session "$SESSION_TC1" "ORCHESTRATOR"
 trap "cleanup_fake_session '$SESSION_TC1'" EXIT
 
@@ -199,12 +199,12 @@ trap "cleanup_fake_session '$SESSION_TC1'" EXIT
 TC1_STDERR=$(mktemp)
 TC1_EXIT=$(env -u TELEGRAM_BOT_TOKEN -u TELEGRAM_CHAT_ID \
     TMUX_SESSION="$SESSION_TC1" \
-    bash "$NOTIFY_SH" -l info -w -r orchestrator "test d1025 tc1 env-unset probe" \
+    bash "$NOTIFY_SH" -l info -w -r orchestrator "test d1026 tc1 env-unset probe" \
     2>"$TC1_STDERR" >/dev/null; echo $?)
 TC1_STDERR_CONTENT=$(cat "$TC1_STDERR")
 rm -f "$TC1_STDERR"
 
-TC1_WAKE_PROBE=$(capture_wake_probe "$SESSION_TC1" "test d1025 tc1 env-unset probe")
+TC1_WAKE_PROBE=$(capture_wake_probe "$SESSION_TC1" "test d1026 tc1 env-unset probe")
 
 # RED-first expectations (tmpl pre-port — Issue #1053 unfixed):
 # - exit code 2 (NOT 1 — the spec mandates 2 per option B)
@@ -226,21 +226,21 @@ trap - EXIT
 # -------------------------------------------------------------------------
 echo ""
 echo "TC2: TELEGRAM_BOT_TOKEN invalid → notify.sh exit 2 + tmux-wake"
-SESSION_TC2="d1025-tc2-$$"
+SESSION_TC2="d1026-tc2-$$"
 create_fake_session "$SESSION_TC2" "DEVELOPER"
 trap "cleanup_fake_session '$SESSION_TC2'" EXIT
 
 # Set bogus token to force API rejection; use a fake chat_id too.
 TC2_STDERR=$(mktemp)
-TC2_EXIT=$(env TELEGRAM_BOT_TOKEN="invalid-token-for-d1025-test" \
-    TELEGRAM_CHAT_ID="invalid-chat-for-d1025-test" \
+TC2_EXIT=$(env TELEGRAM_BOT_TOKEN="invalid-token-for-d1026-test" \
+    TELEGRAM_CHAT_ID="invalid-chat-for-d1026-test" \
     TMUX_SESSION="$SESSION_TC2" \
-    bash "$NOTIFY_SH" -l info -w -r developer "test d1025 tc2 invalid-token probe" \
+    bash "$NOTIFY_SH" -l info -w -r developer "test d1026 tc2 invalid-token probe" \
     2>"$TC2_STDERR" >/dev/null; echo $?)
 TC2_STDERR_CONTENT=$(cat "$TC2_STDERR")
 rm -f "$TC2_STDERR"
 
-TC2_WAKE_PROBE=$(capture_wake_probe "$SESSION_TC2" "test d1025 tc2 invalid-token probe")
+TC2_WAKE_PROBE=$(capture_wake_probe "$SESSION_TC2" "test d1026 tc2 invalid-token probe")
 
 # RED-first expectations:
 # - exit code 2 (NOT 1)
@@ -262,7 +262,7 @@ trap - EXIT
 # -------------------------------------------------------------------------
 echo ""
 echo "TC3: valid env + reachable bot → notify.sh exit 0 + dual-channel (regression guard)"
-SESSION_TC3="d1025-tc3-$$"
+SESSION_TC3="d1026-tc3-$$"
 create_fake_session "$SESSION_TC3" "ARCHITECT"
 
 # TC3 is a regression guard: if real Telegram env is set, verify the
@@ -275,12 +275,12 @@ else
     trap "cleanup_fake_session '$SESSION_TC3'" EXIT
     TC3_STDERR=$(mktemp)
     TC3_EXIT=$(TMUX_SESSION="$SESSION_TC3" \
-        bash "$NOTIFY_SH" -l info -w -r architect "test d1025 tc3 happy-path probe" \
+        bash "$NOTIFY_SH" -l info -w -r architect "test d1026 tc3 happy-path probe" \
         2>"$TC3_STDERR" >/dev/null; echo $?)
     TC3_STDERR_CONTENT=$(cat "$TC3_STDERR")
     rm -f "$TC3_STDERR"
 
-    TC3_WAKE_PROBE=$(capture_wake_probe "$SESSION_TC3" "test d1025 tc3 happy-path probe")
+    TC3_WAKE_PROBE=$(capture_wake_probe "$SESSION_TC3" "test d1026 tc3 happy-path probe")
 
     if [ "$TC3_EXIT" = "0" ] && [ "$TC3_WAKE_PROBE" = "PASS" ]; then
         check "TC3 (happy-path exit 0 + tmux-wake)" "PASS"
@@ -297,19 +297,19 @@ fi
 # -------------------------------------------------------------------------
 echo ""
 echo "TC4: peer-poke.sh.tmpl with Telegram unset → exit 2 + tmux-wake (inherits notify.sh option B)"
-SESSION_TC4="d1025-tc4-$$"
+SESSION_TC4="d1026-tc4-$$"
 create_fake_session "$SESSION_TC4" "ORCHESTRATOR"
 trap "cleanup_fake_session '$SESSION_TC4'" EXIT
 
 TC4_STDERR=$(mktemp)
 TC4_EXIT=$(env -u TELEGRAM_BOT_TOKEN -u TELEGRAM_CHAT_ID \
     TMUX_SESSION="$SESSION_TC4" \
-    bash "$PEER_POKE_SH" orchestrator "test d1025 tc4 peer-poke env-unset probe" \
+    bash "$PEER_POKE_SH" orchestrator "test d1026 tc4 peer-poke env-unset probe" \
     2>"$TC4_STDERR" >/dev/null; echo $?)
 TC4_STDERR_CONTENT=$(cat "$TC4_STDERR")
 rm -f "$TC4_STDERR"
 
-TC4_WAKE_PROBE=$(capture_wake_probe "$SESSION_TC4" "test d1025 tc4 peer-poke env-unset probe")
+TC4_WAKE_PROBE=$(capture_wake_probe "$SESSION_TC4" "test d1026 tc4 peer-poke env-unset probe")
 
 # RED-first expectations (peer-poke.sh.tmpl exec's notify.sh, so inherits behavior):
 # - exit code 2 (peer-poke.sh.tmpl forwards notify.sh's exit)
@@ -328,7 +328,7 @@ trap - EXIT
 # -------------------------------------------------------------------------
 echo ""
 echo "TC5: agent-wake.sh OSC-2 title contamination → fallback index map fires"
-SESSION_TC5="d1025-tc5-$$"
+SESSION_TC5="d1026-tc5-$$"
 # Create fake session with OSC-2 contaminated pane title (title-match
 # will fail; fallback index map to main.0 should still fire)
 create_fake_session "$SESSION_TC5" $'\xe2\xa0\x90 BOOTSTRAP orchestrator agent'
@@ -337,13 +337,13 @@ create_fake_session "$SESSION_TC5" $'\xe2\xa0\x90 BOOTSTRAP orchestrator agent'
 # agent-wake.sh swallows send-keys errors with `|| exit 0` (line 67),
 # so this TC verifies graceful no-op, not wake-success.
 # A more robust fallback test would require setting up panes at main.0-4
-# addresses; deferred to follow-up d-test (out of scope for d1025).
+# addresses; deferred to follow-up d-test (out of scope for d1026).
 trap "cleanup_fake_session '$SESSION_TC5'" EXIT
 
 # Just verify the call doesn't crash and produces no error output
 TC5_STDERR=$(mktemp)
 TC5_EXIT=$(TMUX_SESSION="$SESSION_TC5" \
-    bash "$AGENT_WAKE_SH" orchestrator "test d1025 tc5 osc2 fallback probe" \
+    bash "$AGENT_WAKE_SH" orchestrator "test d1026 tc5 osc2 fallback probe" \
     2>"$TC5_STDERR" >/dev/null; echo $?)
 TC5_STDERR_CONTENT=$(cat "$TC5_STDERR")
 rm -f "$TC5_STDERR"
@@ -366,6 +366,6 @@ trap - EXIT
 # -------------------------------------------------------------------------
 echo ""
 echo "==============================================="
-echo "d1025-s29-template-env-decoupling-port-parity: $pass pass, $fail fail"
+echo "d1026-s29-template-env-decoupling-port-parity: $pass pass, $fail fail"
 echo "==============================================="
 [ "$fail" -eq 0 ] || exit 1
