@@ -112,13 +112,17 @@ resolve_values() {
   HEARTBEAT_BASE="${DEV_STUDIO_HEARTBEAT_BASE:-/var/log/dev-studio}"
   HEARTBEAT_DIR="$HEARTBEAT_BASE/$PROJECT_NAME"
 
+  # Calendar year for LICENSE.tmpl Copyright line (Sprint 29 W2B+ S29-016 P0).
+  YEAR="$(date -u +%Y)"
+
   printf '\n%s  Placeholder values resolved:%s\n' "$C_BOLD" "$C_RESET"
   printf '    REPO_ROOT        = %s\n' "$REPO_ROOT"
   printf '    GITHUB_OWNER     = %s\n' "$GITHUB_OWNER"
   printf '    GITHUB_REPO      = %s\n' "$GITHUB_REPO"
   printf '    HUMAN_OWNER_NAME = %s\n' "$HUMAN_OWNER_NAME"
   printf '    PROJECT_NAME     = %s\n' "$PROJECT_NAME"
-  printf '    HEARTBEAT_DIR    = %s\n\n' "$HEARTBEAT_DIR"
+  printf '    HEARTBEAT_DIR    = %s\n' "$HEARTBEAT_DIR"
+  printf '    YEAR             = %s\n\n' "$YEAR"
 }
 
 # --- Ensure PROJECT_TOKEN secret is set on the repo (ADR-0014) ------------
@@ -437,6 +441,7 @@ render_one() {
       -e "s|{{HUMAN_OWNER_NAME}}|${HUMAN_OWNER_NAME}|g" \
       -e "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" \
       -e "s|{{HEARTBEAT_DIR}}|${HEARTBEAT_DIR}|g" \
+      -e "s|{{YEAR}}|${YEAR}|g" \
       "$src" > "$dst"
 
   # Preserve executable bit if source had it (relevant for shell templates).
