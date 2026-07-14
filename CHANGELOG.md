@@ -76,6 +76,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **#91 → Phase B (sister of AtilCalculator PR #1057, Issue #1060) — notify.sh
+  env-decoupling port (AC1 Option B per Issue #1055).** Sister-pattern port of
+  the AtilCalculator env-decoupling fix to `scripts/notify.sh` on template.
+  Phase A (RED-first d-test `d1026-s29-template-env-decoupling-port-parity`)
+  already merged via PR #91 (commit `8b813cc`); Phase B (this PR) implements
+  the fix. Pre-fix: `notify.sh` exited 1 on Telegram env-missing BEFORE tmux-wake
+  fired, breaking ADR-0033 dual-channel doctrine in CI/dev/recovery envs
+  (Issue #1053 cross-repo sister). Post-fix: env-missing or API-fail logs
+  WARN/ERROR + marks Telegram failed, but tmux-wake fires UNCONDITIONALLY
+  (when `-w` set). Exit-code matrix matches AtilCalculator's (0/1/2/3).
+  Diff: `scripts/notify.sh` +115/-26, this CHANGELOG entry. Phase A regression
+  pin: `scripts/tests/d1026-s29-template-env-decoupling-port-parity.sh`
+  (Phase A RED-first per ADR-0044).
+
 - **#61 — Watcher phantom re-delivery of `board-*` events (P1).** Orchestrator's
   `agent-watch.sh` loop was receiving the same two `label_change` events
   (`board-50-*`, `board-52-*`) repeatedly across polls, even though both source
