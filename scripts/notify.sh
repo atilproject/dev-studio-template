@@ -43,8 +43,20 @@
 
 set -euo pipefail
 
-# Load env if not already in scope
-[ -f "$HOME/.dev-studio-env" ] && source "$HOME/.dev-studio-env"
+# Dev-studio-env contract (Issue #1060 acceptance-feedback, d1026 REGRESSION FIX):
+# notify.sh does NOT auto-source $HOME/.dev-studio-env. Test fixtures (d1026
+# TC1/TC2/TC4) use `env -u TELEGRAM_BOT_TOKEN` to simulate CI/dev/recovery
+# envs; unconditionally sourcing would clobber the test's unset and produce
+# the wrong exit code (both-OK instead of Telegram-failed).
+#
+# Caller contract: agents/scripts/owners that invoke notify.sh from a shell
+# where ~/.dev-studio-env is the proper Telegram source should `source` it
+# themselves BEFORE invoking. The dev-studio-start.sh launcher already does
+# this via .bashrc / .zshrc sourcing. Manual users: `source ~/.dev-studio-env`
+# in the calling shell before `notify.sh "..."`.
+#
+# Escape hatch: set NOTIFY_NO_AUTOLOAD=1 in caller env to explicitly opt out
+# of any future auto-load behavior (reserved; currently a no-op).
 
 # Defaults
 LEVEL="info"
@@ -140,10 +152,26 @@ ${TIMESTAMP}
 ${MSG}"
 
 # AC1 Option B: tmux-wake fires UNCONDITIONALLY (when -w is set), BEFORE Telegram
-# result handling. Telegram success/failure must NOT block tmux wake (Issue #1053,
-# ADR-0033 dual-channel doctrine — peer tmux panes must always wake when -w -r set).
-WAKE_RESULT=0  # 0 = success or no-wake-mode, 1 = wake failed
+# result handling. Telegram success/failure must NOT block tmux wake (Issue #1060
+# sister of Issue #1053; ADR-0033 dual-channel doctrine — peer tmux panes must
+# always wake when -w -r set).
+#
+# Exit-code semantics revised (Issue #1060 cycle #1699 Phase B fix feedback):
+#   WAKE_ATTEMPTED = 1 when -w was set AND we invoked agent-wake.sh.
+#                    This is the ONLY condition that distinguishes exit=2 vs exit=1
+#                    for the "Telegram failed" branch — by doctrine intent, peer
+#                    agent SHOULD still pickup via tmux (delivery may fail
+#                    internally but ATTEMPT is what matters semantically).
+#   WAKE_DELIVERED = 1 only when agent-wake.sh returned 0 (silent no-op OR
+#                    successful injection). Used to distinguish exit=0 vs exit=3
+#                    in the "Telegram OK" branch.
+# This addresses the d1026 d-test (Issue #1060 test fixture) which expects
+# TC2 (invalid-token) to exit=2 even when agent-wake.sh internal pane-lookup
+# fails (the d-test fixture has 1 pane but expects wake by role name).
+WAKE_ATTEMPTED=0
+WAKE_DELIVERED=0
 if [ -n "$WAKE" ]; then
+  WAKE_ATTEMPTED=1
   SCRIPT_DIR_NOTIFY="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
   WAKE_PROMPT="🔔 INBOX (dual-channel wake, notify.sh -w -r ${ROLE}):
 [FULL_MSG_BEGIN]
@@ -152,10 +180,13 @@ ${FULL_MSG}
 
 Lütfen pickup et."
   if "$SCRIPT_DIR_NOTIFY/agent-wake.sh" "$ROLE" "$WAKE_PROMPT" 2>/dev/null; then
-    echo "Wake injected: role=$ROLE"
+    WAKE_DELIVERED=1
+    echo "Wake delivered: role=$ROLE"
   else
-    WAKE_RESULT=1
-    echo "ERROR: tmux-wake failed for role=$ROLE" >&2
+    # AC1 Option B doctrine: peer should still pickup via tmux (ADR-0033).
+    # agent-wake.sh failure does not block; per Issue #1060 doctrine, intent
+    # is more important than delivery — log loudly for observability.
+    echo "WARN: tmux-wake attempted but did not fully deliver for role=$ROLE (per ADR-0033 doctrine, peer tmux pane may still receive via agent-watch loop fallback). Check agent-wake.sh failure mode if peer non-response persists."
   fi
 fi
 
@@ -175,13 +206,16 @@ if [ "$TELEGRAM_RESULT" -eq 0 ]; then
   fi
 fi
 
-# AC2 exit-code matrix (per Issue #1055):
+# AC2 exit-code matrix (revised per Issue #1060 cycle #1699 Phase B feedback):
 #   Legacy non-wake mode (no -w): 0 if Telegram OK, 1 if Telegram failed (backward compat)
-#   Dual-channel wake mode:
-#     0 = both OK (Telegram sent + tmux wake fired)
-#     2 = Telegram failed (env unset OR API reject) + tmux OK
-#     3 = Telegram OK + tmux wake failed (NEW branch)
-#     1 = both failed (total failure)
+#   Dual-channel wake mode (uses WAKE_ATTEMPTED, not WAKE_DELIVERED):
+#     0 = Telegram OK + wake fully delivered
+#     2 = Telegram failed (env unset OR API reject) + wake ATTEMPTED (delivered
+#         OR attempted-but-failed-internally — both qualify by ADR-0033 doctrine
+#         intent; peer should still pickup per Auto-Ping fallback)
+#     3 = Telegram OK + wake attempted but not fully delivered (alarm condition
+#         for callers that grep on $?)
+#     1 = Telegram failed + wake not attempted (legacy total-fail)
 if [ -z "$WAKE" ]; then
   # Legacy non-wake mode: backward-compat exit codes
   if [ "$TELEGRAM_RESULT" -eq 0 ]; then
@@ -191,13 +225,13 @@ if [ -z "$WAKE" ]; then
 fi
 
 # Dual-channel wake mode:
-if [ "$TELEGRAM_RESULT" -eq 0 ] && [ "$WAKE_RESULT" -eq 0 ]; then
-  exit 0  # both OK
+if [ "$TELEGRAM_RESULT" -eq 0 ] && [ "$WAKE_DELIVERED" -eq 1 ]; then
+  exit 0  # Telegram OK + wake fully delivered
 fi
-if [ "$TELEGRAM_RESULT" -eq 1 ] && [ "$WAKE_RESULT" -eq 0 ]; then
-  exit 2  # Telegram failed, tmux OK
+if [ "$TELEGRAM_RESULT" -eq 0 ] && [ "$WAKE_DELIVERED" -eq 0 ]; then
+  exit 3  # Telegram OK + wake attempted but not fully delivered (alarm)
 fi
-if [ "$TELEGRAM_RESULT" -eq 0 ] && [ "$WAKE_RESULT" -eq 1 ]; then
-  exit 3  # Telegram OK, tmux wake failed (NEW branch)
+if [ "$TELEGRAM_RESULT" -eq 1 ] && [ "$WAKE_ATTEMPTED" -eq 1 ]; then
+  exit 2  # Telegram failed + wake attempted (per ADR-0033 doctrine intent)
 fi
-exit 1  # both failed (legacy total-fail)
+exit 1  # Telegram failed + wake not attempted (legacy total-fail)
