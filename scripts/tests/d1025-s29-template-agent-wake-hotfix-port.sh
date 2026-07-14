@@ -59,16 +59,19 @@ section() { printf "\n${B}==== %s ====${D}\n" "$1"; }
 # ---------------------------------------------------------------------------
 TMPDIR=$(mktemp -d)
 MOCK_LOG="$TMPDIR/mock.log"
+export MOCK_LOG
 : > "$MOCK_LOG"
 
-# Unquoted heredoc — ${MOCK_LOG} and ${TMPDIR} expand at write-time (so the
-# mock has the absolute log path baked in). \$@ and \$1 stay literal (runtime
-# placeholders).
-cat > "$TMPDIR/tmux" <<MOCK_EOF
+# Single-quoted heredoc preserves \${...} env-var references literally so the
+# mock evaluates them at runtime (per Issue #1063 fix-point: MOCK_TMUX_SENDKEYS_FAIL=1
+# must actually fail send-keys, MOCK_TMUX_CAPTURE_MATCH=0 must echo garbage).
+# Absolute path expansion (for log writes) is done by the runtime mock itself
+# via absolute ${MOCK_LOG} reference inherited from parent env.
+cat > "$TMPDIR/tmux" <<'MOCK_EOF'
 #!/usr/bin/env bash
 # Mock tmux for d1025 RED-first testing (template side)
-echo "\$@" >> "${MOCK_LOG}"
-case "\$1" in
+echo "$@" >> "${MOCK_LOG}"
+case "$1" in
   has-session) exit 0 ;;
   list-panes)
     # Output: pane_id pane_index pane_title (matches Fix 2 expected format)
@@ -154,7 +157,11 @@ fi
 section "TC3: Fix 2 — orchestrator resolves to dev-studio:0.0"
 export MOCK_TMUX_SENDKEYS_FAIL=0
 : > "$MOCK_LOG"
-"$WAKE_SH" orchestrator "test" >/dev/null 2>&1
+# Wrap WAKE_SH with `|| true` — Fix 3 verify failure exits 1 (correct log-honesty),
+# but TC3 only checks the mock log for send-keys entry. Sister-pattern: TC4 (line 179),
+# TC5 (line 193) already use `|| true`. TC1 (line 131-134) wraps with `set +e`/`set -e`.
+# Without this wrap, d-test's `set -e` (line 134 from TC1) crashes on WAKE_SH exit 1.
+"$WAKE_SH" orchestrator "test" >/dev/null 2>&1 || true
 if grep -qE 'send-keys.*-t.*dev-studio:0\.0\b' "$MOCK_LOG"; then
   pass "orchestrator → dev-studio:0.0 (pane_index 0)"
 else
