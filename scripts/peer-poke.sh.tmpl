@@ -36,11 +36,16 @@
 #   T2: missing args → exit 2 + usage to stderr
 #   T3: bash -n syntactically valid
 #
-# Doctrinal contract (d-test d081-auto-verdict-by-hook.sh, 4 TCs for peer-poke.sh):
-#   TC2: verdict-by + add-label pair invocation present
-#   TC3: atomic pairing doctrine (paired cc:* + verdict-by:* in same gh edit)
+# Doctrinal contract (d-test d081-auto-verdict-by-hook.sh, 9 TCs total — 5 base + 4 sister-pattern extensions):
+#   TC1: Layer 5 auto-inject hook in label-check.yml (addLabel call referencing verdict-by:)
+#   TC2: Agent-side peer-poke.sh auto-pair helper (verdict-by + add-label pair invocation)
+#   TC3: Atomic pairing doctrine (ADR-0015) — paired cc:* + verdict-by:* in SAME gh invocation
 #   TC4: VERDICT_BY_DEFAULT_HOURS=24 (default deadline +24h)
-#   TC5: silent-skip idempotency on verdict-by:<ts> already present
+#   TC5: Silent-skip idempotency on verdict-by:<ts> already present (no double-deadline overwrite)
+#   TC6: PR-payload shape branching (Issue #714) — isPR ternary present
+#   TC7: Issue-payload shape branching (defensive cross-check per Issue #714 sister-pattern)
+#   TC8: peerLabel accessor uses payload.label.name (Issue #713 L189 regression guard)
+#   TC9: gh label create defensive pre-step (Issue #1070) — pre-create verdict-by:<ts> in repo label catalog
 #
 # Refs:
 #   - Issue #296 (peer-poke wrapper doctrine)
@@ -101,6 +106,19 @@ print((datetime.datetime.utcnow() + datetime.timedelta(hours=hours)).strftime('%
     local labels_to_add="$verdict_by_label"
     if [ -n "$role" ]; then
         labels_to_add="cc:${role} ${verdict_by_label}"
+    fi
+
+    # TC9 (Issue #1070): pre-create verdict-by label if absent in repo catalog.
+    # gh CLI refuses to add labels that don't exist in the repo's label catalog
+    # (returns "label not found"). pre-create with --force to handle the race
+    # where another peer-poke is creating the same label simultaneously, and to
+    # make the operation idempotent on subsequent calls. --force re-applies
+    # color/description if the label exists.
+    if ! gh label view "$verdict_by_label" >/dev/null 2>&1; then
+        gh label create "$verdict_by_label" \
+            --color "0E8A16" \
+            --description "Tester verdict deadline (auto-paired via peer-poke.sh verdict-by auto-pair hook per ADR-0024 amendment)" \
+            --force 2>/dev/null || true
     fi
 
     if [ "$target_kind" = "issue" ]; then
