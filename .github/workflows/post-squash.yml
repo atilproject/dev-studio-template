@@ -1,0 +1,120 @@
+name: Post-Squash Cluster-Lag Detector (ADR-0059, Template Verbatim Port)
+
+# =============================================================================
+# S29-010 themed impl PR (PR-C/4) — DEV STUDIO TEMPLATE VERBATIM PORT (Option B)
+#
+# Source: AtilCalculator .github/workflows/post-squash.yml (sister-pattern)
+# Design: PR #1047 squash-merged d0cf929 (S29-010, AC1.3)
+#
+# ADAPTATION RATIONALE (per arch verdict on Issue #1050, Option B verbatim):
+#   S29-010 design R-4 mitigation was "silent_skip variant because template
+#   has no scripts/post-squash/". After S29-009 (PR #75, commit 7d413d6)
+#   forward-ported scripts/post-squash/{cluster-lag-detector.sh,
+#   label-hygiene.sh}, the R-4 rationale became stale. Arch verdict Option B:
+#   port verbatim (sister-pattern discipline preserved) with R-1
+#   parameterization of CLUSTER_LAG_LOG path so downstream projects get
+#   auto-derived log location:
+#     CLUSTER_LAG_LOG = /var/log/dev-studio/${{ env.PROJECT_NAME }}/cluster-lag.log
+#   PROJECT_NAME derived from github.event.repository.name (auto-set per repo).
+#
+#   Sister-pattern to PR #85 (lint-and-test.yml) ADAPTATION RATIONALE — both
+#   port AtilCalculator workflows to template with documented deviations.
+#
+# Downstream adaptation note:
+#   When a downstream project bootstraps from this template, the workflow
+#   auto-derives PROJECT_NAME from the repo name; no further config needed.
+#   The systemd path /var/log/dev-studio/<project>/ must exist (created by
+#   dev-studio-init.sh per ADR-0010 sister-pattern).
+#
+# 9-Lens coverage (per ADR-0045):
+#   - lens (h): SHA pin all actions/* — actions/checkout pinned to v4 SHA
+#     matching ci.yml + label-check.yml.
+#   - lens (i): 8 sub-categories applied — see step-level comments.
+# =============================================================================
+
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions:
+  contents: read
+  pull-requests: read
+
+# Concurrency: serialize concurrent PR-closed events per PR so log writes
+# don't race (sister-pattern to label-check.yml Layer 4, ADR-0012 cascade-strip).
+# cancel-in-progress: false — in-flight run completes; new run waits.
+concurrency:
+  group: post-squash-${{ github.event.repository.name }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: false
+
+env:
+  # R-1 parameterization (per arch verdict on Issue #1050 Option B): derive
+  # project name from repo so downstream projects get auto-derived log path.
+  # Used in step-level env: blocks via ${{ env.PROJECT_NAME }}.
+  PROJECT_NAME: ${{ github.event.repository.name }}
+
+jobs:
+  cluster-lag-detect:
+    name: Detect cluster-squash batch-lag (template verbatim port)
+    runs-on: [self-hosted, Linux, X64, atilproject]
+
+    # AC2 guard: only fire on PR closed+merged (NOT closed-not-merged).
+    # Without this guard, every PR close (incl. abandoned PRs) would
+    # trigger cluster-lag-detector — false-positive class per Issue #605.
+    if: github.event.pull_request.merged == true
+
+    steps:
+      - name: Checkout
+        # SHA-pinned per ADR-0027 §Threat model + ADR-0043 §lens (h).
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+
+      - name: Fetch sibling merged PRs (FAKE_GH_MERGED)
+        id: fetch-siblings
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Pull last 20 merged PRs (window > 600s lookback per ADR-0059 §1 + d064 TC2).
+          # gh pr list --json number,mergedAt emits [{"number":N,"mergedAt":"ISO-8601 UTC"}]
+          # which matches the schema cluster-lag-detector.sh expects (line 107 docstring).
+          gh pr list \
+            --state merged \
+            --limit 20 \
+            --json number,mergedAt \
+            > /tmp/merged.json
+
+          # Validate shape per ADR-0056 Option X explicit jq check (sister-pattern
+          # to d064 TC6 / F3 fix). On parse failure, exit 2 — script will detect
+          # and emit ERROR to stderr; workflow continues to invocation step
+          # (silent_skip path emits log entry per ADR-0048 lens d).
+          if ! jq -e 'type == "array"' /tmp/merged.json >/dev/null 2>&1; then
+            echo "ERROR: gh pr list output is not a JSON array; cluster-lag-detector.sh will exit 2"
+            echo '[]' > /tmp/merged.json
+          fi
+
+      - name: Invoke cluster-lag-detector.sh (ADR-0059)
+        env:
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGED_AT: ${{ github.event.pull_request.merged_at }}
+          REPO: ${{ github.repository }}
+          CLUSTER_ID: ${{ github.event.repository.name }}-${{ github.event.pull_request.base.ref }}-cluster
+          DETECTOR_VERSION: 0.1.0
+          # R-1 parameterization (arch verdict Issue #1050 Option B): log path
+          # derived from PROJECT_NAME workflow-level env var. Template repo
+          # expands to /var/log/dev-studio/dev-studio-template/cluster-lag.log;
+          # downstream projects auto-derive their own path.
+          CLUSTER_LAG_LOG: /var/log/dev-studio/${{ env.PROJECT_NAME }}/cluster-lag.log
+          FAKE_GH_MERGED: /tmp/merged.json
+        run: |
+          mkdir -p "$(dirname "$CLUSTER_LAG_LOG")"
+          bash scripts/post-squash/cluster-lag-detector.sh
+          echo "::notice title=cluster-lag-detector::exit=$? log=$CLUSTER_LAG_LOG"
+
+      - name: Upload cluster-lag.log artifact
+        if: always()
+        uses: actions/upload-artifact@5d5d22a31266ced268874388b861e4b58bb5c2f3  # v4
+        with:
+          name: cluster-lag-log
+          # R-1 parameterization: artifact path matches log path
+          path: /var/log/dev-studio/${{ env.PROJECT_NAME }}/cluster-lag.log
+          if-no-files-found: warn
+          retention-days: 30
