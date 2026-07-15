@@ -158,7 +158,25 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 STATE_HELPER="$SCRIPT_DIR/agent-state.sh"
 ROLE="${1:-}"
-MODE="${2:---once}"
+# MODE detection: walk argv to find --once/--loop. Fix for Issue #107 (sister-
+# mirror of AtilCalculator Issue #1086 + PR #1087 d1043) — the previous
+# positional MODE-grab-on-second-arg fired "Unknown mode: --repo" / "Unknown
+# mode: --org" at the script's terminal MODE case-statement when those flags
+# followed <role> directly (Bug A).
+# Skip pattern: --repo/--org consume 1 extra arg (the flag value); --repo=*/
+# --org=* consume 0 extra; --once/--loop set MODE and consume 0 extra.
+MODE="--once"
+_idx=2
+while [ "$_idx" -le "$#" ]; do
+  _arg="${!_idx:-}"
+  case "$_arg" in
+    --repo|--org) _idx=$((_idx + 2)) ;;
+    --repo=*|--org=*) _idx=$((_idx + 1)) ;;
+    --once) MODE="--once"; _idx=$((_idx + 1)) ;;
+    --loop) MODE="--loop"; _idx=$((_idx + 1)) ;;
+    *) _idx=$((_idx + 1)) ;;
+  esac
+done
 TMUX_SESSION="${TMUX_SESSION:-dev-studio}"
 STALE_CC_SEC="${STALE_CC_SEC:-900}"
 # v6 (ADR-0024 — stale-verdict watchdog schema): back-compat shim window.
