@@ -96,7 +96,8 @@ if [ -f "$DEV_STUDIO_START" ]; then
   # Use -- to terminate option parsing so the grep pattern starts cleanly.
   # Pattern: literal `--agent ` (with trailing space) anchored to avoid false
   # positives from any other `--agent` reference in comments/docs (per spec).
-  agent_count=$(grep -c -- '--agent ' "$DEV_STUDIO_START" 2>/dev/null || echo 0)
+  agent_count=$(grep -c -- '--agent ' "$DEV_STUDIO_START" 2>/dev/null)
+  agent_count="${agent_count:-0}"
   if [ "$agent_count" -eq 0 ]; then
     pass "dev-studio-start.sh contains 0 occurrences of --agent (post-fix)"
   else
@@ -119,7 +120,8 @@ if command -v claude >/dev/null 2>&1; then
   # still in claude --help (used for built-in agents). This regression detector
   # catches a scenario where someone "fixes" --agent by removing it entirely
   # from the CLI's argv surface, which would break the smoke-test path.
-  help_agent_count=$(claude --help 2>&1 | grep -c '^  --agent ' || echo 0)
+  help_agent_count=$(claude --help 2>&1 | grep -c '^  --agent ')
+  help_agent_count="${help_agent_count:-0}"
   if [ "$help_agent_count" -ge 1 ]; then
     pass "claude --help still lists --agent flag ($help_agent_count match) — CLI argv surface intact"
   else
@@ -258,7 +260,8 @@ if [ -f "$DEV_STUDIO_START" ]; then
   # Positive regression check: ensure the identity-loading flag is still wired.
   # After removing --agent, identity MUST continue to load via
   # --append-system-prompt-file .claude/agents/${role}.md (per ADR-0060).
-  append_count=$(grep -c -- '--append-system-prompt-file' "$DEV_STUDIO_START" 2>/dev/null || echo 0)
+  append_count=$(grep -c -- '--append-system-prompt-file' "$DEV_STUDIO_START" 2>/dev/null)
+  append_count="${append_count:-0}"
   if [ "$append_count" -ge 1 ]; then
     pass "--append-system-prompt-file still wired ($append_count occurrence(s)) — identity loading path intact"
   else
