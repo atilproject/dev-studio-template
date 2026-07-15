@@ -1,51 +1,78 @@
 # Project Context — for all agents
 
 > Read this file at the start of every session. It is the single source of truth for product, team, and process context.
+>
+> This file is **rendered** from `CLAUDE.md.tmpl` by `scripts/dev-studio-init.sh` (ADR-0013, ADR-0050). The template source lives at the repo root of the multi-agent-dev-studio-template; this rendered output is what downstream projects see.
+>
+> If you are editing doctrine, edit the `.tmpl` source — manual changes to this file are lost on re-render.
+
+---
 
 ## Product
-- **Name**: {{GITHUB_REPO}}
-- **Vision**: <one paragraph from `docs/product/vision.md` — Product Manager fills this on first run via the `agent:product-manager` kickoff issue>
-- **Current sprint**: see `docs/sprints/current/plan.md`
-- **Source of truth for backlog**: GitHub Project board (Projects v2)
+
+- **Name**: {{PROJECT_NAME}}
 - **Repository**: https://github.com/{{GITHUB_OWNER}}/{{GITHUB_REPO}}
+- **Source of truth for backlog**: GitHub Project board (Projects v2)
+- **Vision / scope**: see `docs/product/vision.md` (filled in by Product Manager via the `agent:product-manager` kickoff issue). If absent, the project is pre-Vision Intake — open a Vision Intake issue and let PM drive.
+- **Current sprint**: see `docs/sprints/current/plan.md` (snapshot) + `docs/sprints/sprint-NN/plan.md` (active sprint)
+- **Tech-debt ledger**: `docs/tech-debt.md` (architect-owned)
 
 ## Team (5 agents + 1 human)
-| Role | Who | Soul file |
-|---|---|---|
-| Human owner | {{HUMAN_OWNER_NAME}} (@{{GITHUB_OWNER}}) | — |
-| Orchestrator | Claude Code / MiniMax-M3 | `.claude/agents/orchestrator.md` |
-| Product Manager | Claude Code / MiniMax-M3 | `.claude/agents/product-manager.md` |
-| Architect | Claude Code / MiniMax-M3 | `.claude/agents/architect.md` |
-| Developer | Claude Code / MiniMax-M3 | `.claude/agents/developer.md` |
-| Tester | Claude Code / MiniMax-M3 | `.claude/agents/tester.md` |
-| Test Runner / Incident Bot | Codex CLI / gpt-5.5 | (separate process, see `scripts/codex-runner.sh`) |
+
+| Role | Who | Soul file | Lane (cc'd on / NOT cc'd on) |
+|---|---|---|---|
+| Human owner | {{HUMAN_OWNER_NAME}} | — | Owner merge gate, escalation channel |
+| Orchestrator | Claude Code | `.claude/agents/orchestrator.md` (gitignored, owner-only) | All PRs (board sync, kickoff facilitation) |
+| Product Manager | Claude Code | `.claude/agents/product-manager.md` | docs/sprints/souls PRs, NOT scripts/ refactors |
+| Architect | Claude Code | `.claude/agents/architect.md` | docs/decisions/designs PRs + PR reviews (9-Lens per ADR-0045) |
+| Developer | Claude Code | `.claude/agents/developer.md` | src/tests/scripts PRs (impl lane) |
+| Tester | Claude Code | `.claude/agents/tester.md` | tests/scripts/bugs PRs (sign-off lane per ADR-0044 RED-first) |
+| Test Runner / Incident Bot | Codex CLI | `scripts/codex-runner.sh` (separate process) | N/A |
+
+> **PM lane definition (LOCKED since Sprint 13):** PM is cc'd on `docs/sprints/**`, `docs/product/**`, `docs/backlog/**`, `.claude/agents/**` PRs. PM is NOT cc'd on `scripts/**`, `src/**`, `tests/**`, `.github/workflows/**`, `docs/decisions/**` PRs. Full discipline in `.claude/CLAUDE.md §PM lane definition` (after init renders it from `.claude/CLAUDE.md.tmpl`).
 
 ## Process
+
 - **Scrum** with 2-week sprints.
 - **GitHub Projects v2** is the board. Columns: Backlog → Ready → In Progress → In Review → Done.
 - **All PRs are draft** until Tester signoff + human approval.
 - **Branch protection** on `main`: no direct push (enforced by local pre-push hook + human discipline), 1 human approval required, CI green.
-- **Conventional commits**: `feat(scope): ...`, `fix(scope): ...`, `chore(scope): ...`.
+- **Conventional commits**: `feat(scope): ...`, `fix(scope): ...`, `chore(scope): ...`, `docs(scope): ...`.
 - **Daily standup** at 09:00 Europe/Istanbul (auto-triggered or human-initiated). This is the standup *schedule*, NOT a work-hours gate — agents operate 24/7 and never "wait for 09:00" to start or resume work.
 - **Health check** every 30 minutes (systemd timer).
 
 ## Tech stack
-<FILL IN: languages, frameworks, infra. Architect maintains this.>
+
+_Source of truth: see `docs/decisions/ADR-0017-tech-stack.md` (architect-maintained). Changes require an ADR. The AtilCalculator starter ships with:_
+
+- **Language**: Python 3.11+
+- **Package metadata**: `pyproject.toml` (PEP 621)
+- **Test framework**: `pytest`
+- **Lint / format**: `ruff`
+- **Type check**: `mypy --strict`
+- **Numeric precision**: `decimal.Decimal`
+- **Architecture rule**: the engine is a pure-Python module with no I/O or UI deps; CLI / HTTP / WASM surfaces wrap the engine
+- **CI**: GitHub Actions on `ubuntu-latest`
+
+For other stacks: replace this section, update `pyproject.toml`, document the choice in `docs/decisions/`.
 
 ## Definition of Done
+
 A story is "Done" only if ALL of these hold:
+
 1. All acceptance criteria pass automated tests.
 2. Code merged to `main` via PR with human approval.
 3. CI is green on `main` post-merge.
-4. Docs updated (README, changelog, ADR if applicable).
+4. Docs updated (README, CHANGELOG.md, ADR if applicable).
 5. Project card moved to Done by orchestrator.
 6. No new P0/P1 bugs filed against the story within 24h.
 
 ## Communication conventions
+
 - **Issues**: use templates in `.github/ISSUE_TEMPLATE/`.
-- **PR comments**: structured (see developer.md and tester.md).
+- **PR comments**: structured (see `.claude/agents/developer.md` and `.claude/agents/tester.md` for the local copy of these soul files in the multi-agent-dev-studio-template; this rendered project gets its own copy post-init).
 - **Cross-agent**: never DM-style. Always via GitHub Issue or PR comment.
-- **Escalation to human**: Telegram (`scripts/notify.sh -l human`) + GitHub `@`-mention to @{{GITHUB_OWNER}}.
+- **Escalation to human**: Telegram (`scripts/ping.sh human`) + GitHub `@`-mention to the human owner.
 
 ## Auto-Ping Hard-Rule (Cross-Agent Communication)
 
@@ -66,217 +93,41 @@ A story is "Done" only if ALL of these hold:
 <≤2 satır context (opsiyonel)>
 ```
 
-Örnek:
-```
-scripts/notify.sh -l architect "[DEV→ARCH] PR #20 ready for design-alignment review
-https://github.com/{{GITHUB_OWNER}}/{{GITHUB_REPO}}/pull/20
-Check: import path, bind string, sync handler"
-```
+> **Multi-channel discipline (ADR-0033):** Use `scripts/peer-poke.sh <role> "..."` for 1:1 peer wake — it bakes the dual-channel invocation shape (`-l info -w -r <role>`) into a single helper. The legacy `notify.sh -l <role>` form is broken (peer tmux panes never wake). See `docs/decisions/ADR-0033-dual-channel-peer-poke.md`.
 
-### Hangi durumda kime
+Full ping table: see `.claude/CLAUDE.md §Auto-Ping Hard-Rule` post-init (or `.claude/CLAUDE.md.tmpl` in the template source).
 
-| Senin durumun | Auto-ping → | Tipik mesaj |
-|---|---|---|
-| PR draft açtın, review istiyorsun | architect + tester | `[DEV→ARCH+TEST] PR #N ready for review` |
-| Review verdin (🟢/🟡/🔴) | developer | `[ARCH→DEV] PR #N approved` / `PR #N has suggestions` |
-| Sign-off verdin (tester) | developer | `[TEST→DEV] PR #N tests accepted` |
-| Story sizing'i bitirdin | orchestrator | `[<ROLE>→ORCH] sizing posted on issue #N` |
-| Grooming/scope-change tamamlandı | orchestrator | `[PM→ORCH] backlog refreshed, issue #N closed` |
-| ADR yazdın | dev + tester + orch | `[ARCH→ALL] ADR-NNNN accepted, see docs/decisions/` |
-| Bug filed | developer + orch | `[TEST→DEV] bug #N filed, P0/P1` |
-| Sprint ceremony zamanı | all | `[ORCH→ALL] standup in 5 min, post your status` |
-| Blocked > 1h | orch + human | `[<ROLE>→ORCH+HUMAN] blocked on X, need decision` |
+## Autonomy Loop — GitHub-native wake-up
 
-### What you do NOT need to ask
+**TL;DR**: Your work queue is GitHub itself. `scripts/agent-watch.sh <your-role>` polls your queue every 60 seconds. Don't wait for the human to wake you.
 
-- ❌ "Sana mesaj atayım mı?" / "Bunu iletmemi ister misin?" — **Hayır, direkt at.**
-- ❌ "Atilcan, sen architect'e söyler misin?" — **Senin işin, sen söyle.**
-- ❌ "Bekleyeyim mi, ping atayım mı?" — **Ping at, sonra bekle.**
+- **State file**: `/var/log/dev-studio/{{PROJECT_NAME}}/agent-state/<role>.json`
+- **Cadence**: 60s default; can tighten to 15s during critical handoff via `scripts/agent-state.sh set <role> poll_interval_sec 15` (then revert).
+- **Trigger set** (kind → action): `issue_assigned`, `pr_review_requested`, `pr_comment_mention`, `label_change` (orchestrator-only lens).
+- **NEVER**: poll under 30s (GitHub API rate limit); delete state file; ask the human "should I poll?".
 
-### Eskalasyon istisnaları (HUMAN'a ping atılacak durumlar)
-
-Bu durumlar **soul-level decisions** — auto-ping yetmez, HUMAN'a explicit eskalasyon:
-
-- Branch protection / `.github/workflows/` değişikliği gerekiyor
-- Sprint scope-change (story add/remove/swap)
-- ADR'ler arasında conflict var, agent-level çözülmüyor
-- Bir agent 2 kez refused / stuck loop'ta
-- Production deploy/release kararı
-
-Bunlarda: `scripts/notify.sh -l human "<eskalasyon nedeni> + öneri + link"`.
-
-### Why this rule exists
-
-Insan "kurye" değil. Insan **gate-keeper**. Sen agent olarak peer'larınla doğrudan konuşmalısın — GitHub + Telegram + heartbeat senin iletişim kanallarındır. Insan sadece merge/scope-change kararı verir.
-
-## Autonomy Loop — GitHub-native wake-up (ADR-0002)
-
-**TL;DR**: Senin work queue'n GitHub'ın kendisi. `scripts/agent-watch.sh <your-role>` ile her 60 saniyede bir kendi queue'una bak. İnsanın seni uyandırmasını bekleme.
-
-### Why this exists
-
-`scripts/notify.sh` Telegram'a yazar. Telegram'ı **insan** okur, agent'lar okumaz. Yani Auto-Ping tek başına yetmez — peer agent ping'i görmez. Bu boşluğu **iki kanal** kapatır:
-
-1. **GitHub artefact** (her zaman): her ping'in bir GitHub artefact eşi vardır (issue label, PR comment, mention, label change). Agent'lar `agent-watch.sh` polling'inde bunu fark eder.
-2. **Tmux wake** (ADR-0033, Issue #221): `notify.sh -w -r <role>` flag'i Telegram POST'unun ardından `scripts/agent-wake.sh` çağırarak peer agent'ın tmux pane'ine wake prompt enjekte eder. `-w` requires `-r`; aksi halde `notify.sh` exits 2.
-
-### The loop (her session başında, her aksiyon sonrası)
-
-```bash
-bash scripts/agent-watch.sh <your-role>
-```
-
-Çıktı JSON:
-
-```json
-{
-  "role": "<your-role>",
-  "polled_at_utc": "...",
-  "new_events": [
-    { "id": "...", "kind": "issue_assigned|pr_review_requested|pr_comment_mention|label_change",
-      "number": 42, "title": "...", "url": "...", "updated_at": "...",
-      "context": { ... } }
-  ],
-  "next_poll_sec": 60
-}
-```
-
-`new_events` boşsa: 60 saniye uyu, tekrar bak. Dolu ise: her event için aksiyon al, sonra tekrar bak.
-
-### Trigger → action mapping (kind-by-kind)
-
-| `kind` | Anlamı | Senin aksiyonun |
-|---|---|---|
-| `issue_assigned` | Sana `agent:<your-role>` label'lı yeni iş atandı | Story'i oku, branch aç, çalışmaya başla |
-| `pr_review_requested` | `cc:<your-role>` label'lı bir PR review bekliyor | PR'ı oku, review yap, comment + auto-ping |
-| `pr_comment_mention` | Bir peer comment'inde sana `@<your-role>` diye seslendi | Comment'i oku, ilgili aksiyonu al veya yanıt yaz |
-| `label_change` | (Orchestrator-only lens) Board'da bir label değişti | Sprint plan / WIP limit kontrolü |
-
-### State management
-
-- State dosyan: `{{HEARTBEAT_DIR}}/agent-state/<your-role>.json`
-- `agent-watch.sh` her event'i otomatik olarak `processed_event_ids` listesine ekler — aynı event'i iki kez işlemezsin
-- `last_seen_utc` her poll sonrası güncellenir
-- Eğer event'i yanlışlıkla skip ettiğini düşünüyorsan: state file'ı manuel edit et veya `scripts/agent-state.sh set <role> last_seen_utc <ISO-timestamp>` ile geri sar
-
-### Polling cadence
-
-- **Varsayılan**: 60 saniye (`AGENT_POLL_INTERVAL_SEC=60`)
-- **Burst mode**: aktif iş yaparken (PR review yazma, test koşturma, vb.) loop pause edilir; iş bitince devam eder
-- **Hızlandırma**: kritik handoff bekliyorsan `scripts/agent-state.sh set <role> poll_interval_sec 15` ile 15s'ye düşür, sonra geri al
-
-### What you do NOT do
-
-- ❌ İnsanın "şimdi şu story'e başla" demesini bekleme — atandığında **kendiliğinden** başla
-- ❌ Aynı event'i tekrar tekrar işleme — `processed_event_ids` zaten engelliyor, ama tool call'larını tekrar etme
-- ❌ Polling'i 30 saniyenin altına düşürme — GitHub API rate limit
-- ❌ State dosyasını sil/reset etme — last_seen ileri sarılı, geçmiş event'ler kaybolur
-- ❌ İnsan'a "polling yapayım mı?" diye sorma — ADR-0002 zaten karar verildi, sen sadece uygula
-
-### Coupling with Auto-Ping Hard-Rule
-
-Auto-Ping (`notify.sh`) ve Autonomy Loop (`agent-watch.sh`) **birlikte** çalışır. ADR-0033 dual-channel doctrine:
-
-1. Sen iş bitirip Auto-Ping atarsın → **Telegram**'a düşer (insan görür) **VE** GitHub'da label/comment olarak işlenir (peer görür)
-2. `-w -r <role>` flag'i set'li ise → `scripts/agent-wake.sh` da peer agent'ın tmux pane'ine wake prompt enjekte eder (dual-channel — peer anında uyanır, polling'i beklemeden)
-3. Peer agent kendi `agent-watch.sh` loop'unda GitHub artefact'i fark eder → uyandığında zaten tmux prompt'u işlemiş olur
-4. Peer aksiyon alır → kendi Auto-Ping'ini atar → cycle devam eder
-
-**Kural**: her `notify.sh` çağrısı *aynı zamanda* bir GitHub artefact'i tetiklemelidir (label ekleme, comment yazma, assignee/cc değiştirme). Sadece Telegram'a yazıp GitHub'a yazmamak = peer'ı GitHub üzerinden uyandırmamak. `-w -r` eklemek ise ek bir hız kazanımı — peer anında uyanır (polling'i beklemeden).
-
-**Ne zaman `-w` kullan**:
-- Acil handoff: peer'a "şu iş sende" diyorsan (örn. tester → developer "fix pushed, re-review please")
-- Kanıt: PR #239 AtilCalculator'da bu doktrinin Sprint 4 P0 PR'ı merge edildi (16:12Z). `notify.sh -w -r tester "PR #230 ready for review"` şeklinde çağrıldığında, tester'ın tmux pane'ine anında prompt enjekte olur.
-
-**Ne zaman `-w` KULLANMA**:
-- Bilgilendirme amaçlı ping (insana veya broadcast): sadece Telegram yeterli
-- Peer aktif değilse veya sessizse: GitHub artefact yeterli (label/comment), peer watcher loop'unda görür
+Full doctrine: see `.claude/CLAUDE.md §Autonomy Loop` post-init (or `.claude/CLAUDE.md.tmpl` in the template source).
 
 ## Required Label Set on Issue/PR Creation — the birth contract (ADR-0012)
 
-**TL;DR**: Her açtığın issue/PR **dört kategori** label taşımak zorunda: `type:*`, `status:*`, `agent:*`, `cc:*`. Eksiklik = CI fail + board lane'in "No Status" kalması.
+**TL;DR**: Every new issue/PR carries FOUR categories of labels: `type:*`, `status:*`, `agent:*`, `cc:*`. Missing = CI fail + board lane "No Status".
 
-### Why this exists
-
-Önce-sonradan-ekleriz pratiği iki sistemi birden kırıyor: (a) board lane (`status:*` olmadan card "No Status" lane'inde kalır, ADR-0013 sync workflow'u tetiklenmez) ve (b) autonomy loop (`agent:*` olmadan `issue_assigned` event'i kimseyi uyandırmaz, `cc:*` olmadan queue düşmez). Yaşandı: 2026-06-14, ilk `AtilCalculator` bootstrap'ında Issue #2 sadece `agent:human` + `cc:tester` ile açılmıştı; board lane boşlandı, PM downstream pickup yapamadı. ADR-0012 bu pratiği yasaklıyor.
-
-### The four categories — hepsi zorunlu, her create'de
-
-| Kategori | Örnekler | Anlamı |
+| Kategori | Örnekler | Anlam |
 |---|---|---|
-| `type:*` | `type:vision`, `type:feature`, `type:bug`, `type:docs`, `type:chore`, `type:refactor`, `type:incident` | Bu işin türü |
+| `type:*` | `type:vision`, `type:feature`, `type:bug`, `type:docs`, `type:chore`, `type:refactor`, `type:incident` | İşin türü |
 | `status:*` | `status:backlog`, `status:ready`, `status:in-progress`, `status:in-review`, `status:blocked`, `status:done` | Flow'da nerede |
 | `agent:*` | `agent:product-manager`, `agent:architect`, `agent:developer`, `agent:tester`, `agent:orchestrator`, `agent:human` | Sahibi kim |
-| `cc:*` | `cc:product-manager`, `cc:architect`, `cc:developer`, `cc:tester`, `cc:orchestrator` | Top şu an kimde |
+| `cc:*` | `cc:product-manager`, `cc:architect`, `cc:developer`, `cc:tester`, `cc:orchestrator`, `cc:human` | Top şu an kimde |
 
-### Canonical creation patterns (her rolü kendi soul dosyasında da görür)
+**Enforcement**: `.github/workflows/label-check.yml` runs on every `opened|reopened|labeled|unlabeled` event. Missing category = check fail + comment with fix guidance.
 
-Yeni story issue (PM):
-```bash
-gh issue create --title "STORY-NNN: <one-liner>" --body "..." \
-  --label "type:feature" --label "status:backlog" \
-  --label "agent:tester" --label "cc:tester"
-```
-
-ADR PR (Architect):
-```bash
-gh pr create --title "docs(adr): ADR-NNNN <slug>" --body "..." \
-  --label "type:docs" --label "status:in-review" \
-  --label "agent:architect" \
-  --label "cc:product-manager" --label "cc:developer"
-```
-
-Implementation PR (Developer, draft):
-```bash
-gh pr create --draft --title "feat(scope): STORY-NNN <one-liner>" --body "..." \
-  --label "type:feature" --label "status:in-review" \
-  --label "agent:developer" --label "cc:tester" --label "needs-tester-signoff"
-```
-
-Bug issue (Tester):
-```bash
-gh issue create --title "BUG: <one-liner>" --body "Repro: ..." \
-  --label "type:bug" --label "status:backlog" \
-  --label "agent:developer" --label "cc:developer" \
-  --label "priority:P1"
-```
-
-Coordination issue (Orchestrator):
-```bash
-gh issue create --title "Sprint N kickoff" --body "..." \
-  --label "type:chore" --label "status:ready" \
-  --label "agent:orchestrator" --label "cc:product-manager"
-```
-
-### Enforcement — CI is the source of truth
-
-`.github/workflows/label-check.yml` her issue/PR `opened|reopened|labeled|unlabeled` event'inde 4 kategori invariant'ını kontrol eder. Eksikse:
-- PR/issue'a yorum yazılır (hangi kategori eksik, hangi label seçeneklerinden birini eklemen gerek),
-- check fail olur (PR "Checks" UI'ında kırmızı görünür),
-- sen label flip edip ekledikçe re-run olur, yeşillenir.
-
-Karşıtı: PR açıp "sonradan eklerim" demek yok. İlk `gh pr create` komutunda 4 label'ı da yaz.
-
-### Status-label → board sync
-
-`.github/workflows/status-label-to-board.yml` her `status:*` label değişimini Projects v2 Status field'ına mirror eder (ADR-0013). Yani sen `status:in-progress` label'ını koyunca board card'ı da "In Progress" lane'ine geçer; manuel sürükleme gerekmez.
-
-**Auth note (ADR-0014):** Bu workflow `secrets.PROJECT_TOKEN`'a ihtiyaç duyar (classic PAT, scope: `repo` + `project`). Default `GITHUB_TOKEN` ProjectsV2 mutate edemez (NOT_FOUND döner). `dev-studio-init.sh` ilk bootstrap'ta PAT'i otomatik ister ve `gh secret set` ile repo'ya yazar; ikinci projeden itibaren `export PROJECT_TOKEN=ghp_...` yeterli.
-
-### Anti-patterns (yapma)
-
-- ❌ "Label'ı sonra orchestrator koyar" diye eksik açmak — orchestrator board hygiene'ı takip etmez, soul kontratını sen ihlal ediyorsun.
-- ❌ Çoklu `status:*` label'ı aynı anda — mutual exclusion (yakında CI gate olacak, ADR-0012 future work).
-- ❌ Type ambiguous diye eksik bırakmak — best-guess label koy, comment'te "PM relabel etsin" de.
-- ❌ GUI'den issue açıp label koymamak — işe ait tüm template'lerde 4 label preset olarak yazılı; boşluk bırakma.
+**Wake labels (D2.2 — `pr_labeled` query path)**: `needs-tester-signoff`, `needs-architect-review`. Use these to wake a specific peer agent. The legacy `cc:tester` / `cc:architect` still work for legacy paths but `pr_labeled` is primary since D2.2 (ADR-0009 § 10.5.4).
 
 ## Handoff Label Discipline — the universal contract
 
-**TL;DR**: `cc:*` etiketleri "topun kimde olduğunu", `agent:*` etiketleri "işin kime ait olduğunu" gösterir. Bir aksiyon bitince hem `cc:*` hem `agent:*` etiketlerini **atomik** bir komutla "önce-ekle-sonra-sil" sırasıyla çevir. Aksi halde 4-cat invariant (ADR-0012) ihlal olur, watcher loop seni aynı PR'da tekrar tekrar uyandırır ya da sistem freeze olur.
+**TL;DR**: `cc:*` = "top is here now", `agent:*` = "owner of the work". On hand-off, atomically flip BOTH with `--add-label` (next) before `--remove-label` (self) — never the reverse. Otherwise 4-cat invariant breaks and the watcher loop wakes you repeatedly on stale events.
 
 ### The contract — ADR-0015 atomic 4-flag hand-off
-
-Her agent **kendi turunu bir sonraki sahibe devrederken** (`<self>` → `<next>`):
 
 ```bash
 gh issue edit N \
@@ -286,83 +137,168 @@ gh issue edit N \
   --remove-label "agent:<self>"
 ```
 
-**Sıra zorunlu:** önce iki `--add-label` (4-cat invariant her t anında dolu kalır), sonra iki `--remove-label`. `gh` bunu soldan sağa işler; örtüşme anında issue'da iki `agent:*` label'ı olur — ADR-0012 Label Check `length > 0` kontrolü kullanıyor, sorun olmaz.
+**Sıra zorunlu**: önce iki `--add-label` (4-cat invariant her t anında dolu kalır), sonra iki `--remove-label`.
 
-Eşlik eden adımlar:
+Eşlik eden adımler:
 - **Auto-ping**: `scripts/notify.sh -l <next-role> "[<YOU>→<NEXT>] PR #N <reason>"` (Telegram mirror)
-- **Yorum (isteğe bağlı ama önerilir)**: `gh issue comment N --body "..."` — ne yaptığın + neden hand-off olduğu
-
-Bu dört etiket flip + ping **atomik tek bir hareket** olarak düşünülür. Birini atlamak loop'u kırar.
-
-### Sadece `cc:*` flip (peer review, question, scope drift)
-
-Eğer turunu **tamamlamadın**, sadece peşinde olan rolü değiştiriyorsun (örn. PR'a soru sordun, cevap bekliyorsun) — `agent:*` etiketine dokunma:
-
-```bash
-gh issue edit N \
-  --add-label    "cc:<next>" \
-  --remove-label "cc:<self>"
-```
-
-Bu kullanım, hand-off değil **queue passing**'tir. `agent:*` değişmediği için 4-cat invariant her zaman dolu kalır.
+- **Label flip + notify.sh her zaman birlikte** (ADR-0002 doctrine: "GitHub artefact + Telegram mirror")
 
 ### Terminal hand-off (Done)
 
-Orchestrator iş Done'a girdiğinde `agent:*` + `cc:*`'i temizler ve `status:done` ekler. Label Check workflow kapalı (closed) issue'ları ignore eder, bu bypass güvenlidir.
+Orchestrator iş Done'a girdiinde `agent:*` + `cc:*`'i temizler ve `status:done` ekler.
 
-### Label semantik sözlüğü
+### Work-done-elsewhere terminal state (RETRO-024 amendment, Issue #1027)
 
-| Label | Anlamı | Kim koyar | Kim kaldırır |
-|---|---|---|---|
-| `agent:<role>` | Issue/story bu role atandı (sahip) | story oluşturan rol veya hand-off sırasında önceki sahip (ADR-0015) | terminal Done'da orchestrator |
-| `cc:<role>` | Top şu an o role düşütülüyor (active queue) | top'u atan rol | o rolü kendisi (işi bitince) |
-| `status:in-review` | PR review sürecinde | developer (PR ready iken) | orchestrator/human (merge öncesi) |
-| `status:ready` | Tester+arch onayı var, insan merge edebilir | tester (APPROVED verdict ile birlikte) | human (merge ile birlikte) |
-| `needs-architect-review` | Mimari etki var, arch müdahalesi lazım | developer veya tester (şüphe olduğunda) | architect (review yazınca) |
-| `needs-tester-signoff` | Tester sign-off bekliyor (`pr_labeled` wake — D2.2) | developer (PR ready iken) veya architect (review sonrası, label kalır) | tester (APPROVED verdict ile birlikte) |
-
-### Tipik handoff zinciri (mutlu yol)
+When work for an AtilCalculator issue is tracked via a **sister PR in another repo** (cross-repo workstream per RETRO-023, Issue #1024), the canonical terminal state is:
 
 ```
-PM yazar story    → add cc:tester                                    (test plan için, issue phase)
-Tester plan yaz   → remove cc:tester, add cc:developer                (TDD red ready)
-Developer PR aç   → remove cc:developer, add needs-tester-signoff     (D2.2 pr_labeled wake, PR phase)
-Tester APPROVED   → remove needs-tester-signoff, add status:ready     (human merge)
-Human merge       → remove status:ready, close PR
+type:<feature|chore|...> + status:ready + cc:human + (NO agent:*)
 ```
 
-Dallanmalar:
-- ARCH input gerekirse herhangi bir noktada: `add cc:architect`
-- CHANGES REQUESTED: tester `add cc:developer` (fix loop'a geri dön)
-- Question/blocker: PM veya ARCH'a `add cc:<role>` + issue link
+**Why this exists**: Reflexively adding `agent:*` to such an issue re-enables `claim-next-ready.sh` (ADR-0038 §Layer 2) auto-claim on it, pulling completed work back into dev lane — visible churn + ghost work on already-shipped PRs. Two live instances:
+
+- **Cycle #1223 (orchestrator, reflexive 4-cat repair)** — orchestrator added `agent:developer` to work-done issues #1015 (S29-003) + #1017 (S29-005), reflexively "fixing the invariant". RETRO-022 regression.
+- **Cycle #1253 (PM, reflexive AC-verify approval)** — PM approved RETRO-024 ACs (3/3 met) without file-state verification. Sister-pattern recursion: the very reflexive anti-pattern RETRO-024 was filed to address.
+
+**4-cat invariant compliance**: This is a **4-cat-compliant EXCEPTION** to the universal ADR-0012 invariant. The issue has a clear `cc:human` merge gate; the absent `agent:*` signals "work tracked elsewhere, do NOT auto-claim".
+
+**Sister-pattern**: RETRO-022 (original 4-cat gap, Issue #1023), RETRO-023 (cross-repo codification, Issue #1024), RETRO-024 (this doctrine, Issue #1027).
+
+### §4-cat Invariant Repair Silent-Skip Rule (RETRO-024, Issue #1027)
+
+Any 4-cat-repair script (orchestrator hygiene loop, `gh issue edit` reflexive fix, post-PR-script label normalization) MUST **silent-skip** when an issue's current labels already match the work-done-elsewhere terminal state pattern:
+
+```
+type:<*> + status:ready + cc:human + (no agent:*)
+```
+
+Adding `agent:*` to a work-done-elsewhere issue re-enables auto-claim on completed items.
+
+**Implementation gate**: `scripts/claim-next-ready.sh` (auto-claim, ADR-0038 §Layer 2) and any future 4-cat-repair helper MUST filter `status:ready + cc:human` items from their result sets BEFORE the next claim/repair step. `silent_skip` log emission to `auto-claim.log` is required (lens d observability, TD-016/020 family).
+
+**Sister-test**: `scripts/tests/d-retro-024-4cat-repair-silent-skip.sh` (≥5 TCs RED-first per ADR-0044), `scripts/tests/INDEX.md` row per ADR-0055 §1 Cadence Rule 1 atomic.
 
 ### Anti-patterns (sistem-wide yasaklı)
 
-- ❌ **Çift `cc:*` label**: Aynı anda `cc:tester` + `cc:developer` tutmak — top kimde belirsiz.
-- ❌ **Kendi `cc:*`'ini bırakmak**: İşi bitirdin ama label'ı kaldırmadın — watcher loop seni aynı event'le tekrar uyandırır (processed-id koruma var ama label state hala kirli).
-- ❌ **Label flip + notify.sh ayrılması**: Sadece label değiştirmek = peer GitHub poll'una kadar bekler. Sadece notify.sh = insan görür ama peer GitHub artefact'ı görmez. İkisi birlikte zorunlu.
-- ❌ **Kendine `cc:` koymak**: Watcher zaten seni atanan işlerde otomatik uyandırır; kendine etiket koymak gereksiz.
-- ❌ **Soul kurallarını atlatmak**: Her rolün soul dosyasında §Handoff Discipline tablosu var — onu referans al, ad-hoc karar verme.
+- ❌ Aynı anda `cc:tester` + `cc:developer` — top kimde belirsiz.
+- ❌ Kendi `cc:*`'ini bırakmak — watcher loop seni aynı event'le tekrar uyandırır.
+- ❌ Label flip'i `notify.sh` olmadan yapmak — peer GitHub'ı poll etmediği saniyelerde habersiz kalır.
+- ❌ Kendine `cc:` koymak — watcher zaten seni atanan işlerde otomatik uyandırır.
 
 ## Things agents must NEVER do
-- Push directly to `main`.
-- Merge their own PRs.
-- Modify `.github/workflows/`, secrets, branch protection without explicit human approval.
-- Roll their own auth/crypto.
-- Disable failing tests to make CI green.
-- Edit other agents' soul files.
-- **Invent self-imposed work pauses.** Agents do NOT invent "standby", "work hours", "office hours", "iş saatleri", or any time-of-day gating rule. The only valid reasons to pause work are: (a) explicit human instruction in chat (verbatim, current thread), (b) explicit dependency block documented in an issue/PR (with link), or (c) a heartbeat/reprime SOP step. If you find yourself in a "standby", "holding", "waiting for work hours", or similar self-justified pause without (a), (b), or (c) — you are in a halucination loop. Re-read this file, drop the pause, and resume from your role's normal queue. The 09:00 standup is a *schedule*, not a work-hours gate.
+
+- ❌ Push directly to `main`.
+- ❌ Merge their own PRs.
+- ❌ Modify `.github/workflows/`, secrets, branch protection without explicit human approval.
+- ❌ Roll their own auth/crypto.
+- ❌ Disable failing tests to make CI green.
+- ❌ Edit other agents' soul files (`.claude/agents/*.md`).
+- ❌ **Invent self-imposed work pauses.** Agents do NOT invent "standby", "work hours", "office hours", "iş saatleri". The only valid pause reasons are: (a) explicit human instruction in chat (verbatim, current thread), (b) explicit dependency block documented in an issue/PR (with link), (c) a heartbeat/reprime SOP step. The 09:00 standup is a *schedule*, not a work-hours gate.
 
 ## File ownership matrix
+
 | Path | Owner |
 |---|---|
-| `docs/product/` | @product-manager |
-| `docs/backlog/` | @product-manager |
+| `docs/product/` | @product-manager (vision, personas) |
+| `docs/backlog/` | @product-manager (backlog.json, STORY-*.md) |
 | `docs/designs/` | @architect |
 | `docs/decisions/` (ADRs) | @architect |
 | `docs/tech-debt.md` | @architect |
-| `docs/sprints/` | @orchestrator |
+| `docs/sprints/` | @orchestrator (sprint-NN/plan.md, retrospective, close.md) |
 | `docs/bugs/` | @tester |
 | `src/`, `tests/` | @developer (writes), @tester (test files), @architect (reviews) |
-| `.claude/` | human only |
+| `.claude/` | human only (agents propose via PR) |
 | `.github/workflows/` | human only (agents propose via PR) |
+| `CLAUDE.md` (this file) | human-only source → auto-rendered by init script |
+| `TEMPLATE-README.md`, `README.md` | human-only source (template) → auto-rendered by init script |
+
+> **PM lane clarification:** `@product-manager` lane = docs/sprints/souls cc patterns. PM is cc'd on PRs touching `docs/sprints/**`, `docs/product/**`, `docs/backlog/**`, and `.claude/agents/**`. PM is NOT cc'd on PRs touching `scripts/**`, `src/**`, `tests/**`, `.github/workflows/**`, or `docs/decisions/**` (out-of-lane).
+
+## Repository layout (this project)
+
+```
+{{REPO_ROOT}}/
+├── .claude/                  # Agent soul files (gitignored — owner-only)
+│   ├── CLAUDE.md            # Full doctrine (gitignored, source: .tmpl)
+│   ├── agents/              # Per-role soul files (gitignored)
+│   └── commands/            # /standup, /sprint-start etc. (rendered)
+├── .github/
+│   ├── ISSUE_TEMPLATE/      # 7 issue templates
+│   └── workflows/           # CI (label-check, status-label-to-board, secret-canary, d-test)
+├── docs/
+│   ├── decisions/           # ADR-NNNN-*.md (architect lane)
+│   ├── designs/             # Design docs (architect lane)
+│   ├── product/             # Vision, personas (PM lane)
+│   ├── backlog/             # STORY-*.md, backlog.json (PM lane)
+│   ├── sprints/             # sprint-NN/plan.md, retrospective, close.md (orch lane)
+│   └── bugs/                # Tester bug reports
+├── scripts/                 # All automation (init, peer-poke, agent-watch, claim, notify, etc.)
+│   ├── dev-studio-init.sh   # FIRST script after clone: renders .tmpl → final
+│   ├── dev-studio-start.sh  # Launches 5 tmux panes (one per agent)
+│   ├── agent-watch.sh       # Per-role queue poller
+│   ├── claim-next-ready.sh  # ADR-0038 §Layer 2 atomic claim helper
+│   ├── peer-poke.sh         # Dual-channel peer wake (ADR-0033)
+│   ├── notify.sh            # Telegram notifications (legacy single-channel)
+│   ├── ping.sh              # `notify.sh` wrapper (legacy)
+│   ├── install/             # systemd --user watcher installer
+│   └── tests/               # d-test framework (ADR-0049, ≥5 TCs each)
+├── src/                     # Project source code (developer writes, architect reviews)
+├── tests/                   # Project test code (tester writes, developer runs)
+├── systemd/                 # systemd --user service files (rendered)
+├── CLAUDE.md                # ← This file (rendered from CLAUDE.md.tmpl)
+├── CLAUDE.md.tmpl           # ← Source of truth for this file
+├── TEMPLATE-README.md       # Rendered README
+├── pyproject.toml           # Python project metadata
+└── CHANGELOG.md             # Sprint-by-sprint changelog
+```
+
+## Heartbeat log location
+
+Per-role heartbeat: `/var/log/dev-studio/{{PROJECT_NAME}}/<role>.heartbeat`
+Per-role state: `/var/log/dev-studio/{{PROJECT_NAME}}/agent-state/<role>.json`
+Auto-claim audit: `/var/log/dev-studio/{{PROJECT_NAME}}/auto-claim.log`
+Watcher logs: `/var/log/dev-studio/{{PROJECT_NAME}}/<role>.watcher.log`
+
+## Architectural decision records (ADRs)
+
+ADRs live in `docs/decisions/ADR-NNNN-<slug>.md` (numbered, immutable, append-only). Index: `docs/decisions/INDEX.md`. Per the file ownership matrix, only the architect writes ADRs; all other agents reference them.
+
+Major ADRs that shape day-to-day work (read these at least once):
+- `ADR-0001-template-architecture.md` — single-repo template doctrine
+- `ADR-0002-autonomy-loop.md` — `agent-watch.sh` polling loop
+- `ADR-0012-4-cat-label-invariant.md` — required labels on every issue/PR
+- `ADR-0013-status-label-board-sync.md` — `status:*` → Projects v2 mirror
+- `ADR-0014-project-token-auth.md` — `PROJECT_TOKEN` PAT for board sync
+- `ADR-0016-public-by-default.md` — visibility doctrine (Actions quota)
+- `ADR-0024-verdict-by-discipline.md` — `verdict-by:<ts>` convention
+- `ADR-0031-owner-merge-gate.md` — only human squash-merges
+- `ADR-0033-dual-channel-peer-poke.md` — Telegram + tmux pane wake
+- `ADR-0038-auto-claim-protocol.md` — `claim-next-ready.sh` WIP cap
+- `ADR-0044-red-first-tdd.md` — tester d-test BEFORE impl lands
+- `ADR-0045-9-lens-pre-publish.md` — arch pre-publish gate
+- `ADR-0049-d-test-framework.md` — d-test structure (≥5 TCs, sister-pattern)
+- `ADR-0057-closes-anchor-strict-format.md` — `Closes #N` vs `Refs #N`
+
+Full index: `docs/decisions/INDEX.md` (rendered post-init).
+
+## Sprint cadence
+
+- **Length**: 2 weeks (10 working days).
+- **Kickoff**: Monday of week 1 — orchestrator opens `[Sprint NN] Kickoff` issue, human approves.
+- **Daily standup**: 09:00 Europe/Istanbul — orchestrator posts `[Sprint NN] Daily Standup` issue.
+- **Retro + close**: Friday of week 2 — `docs/sprints/sprint-NN/close.md` + `RETRO-NNN.md`.
+- **Wave sequencing** (within a sprint): Wave 1 = foundation; Wave 2 = feature; Wave 3 = polish. PM owns the wave plan; orchestrator enforces via WIP cap.
+
+## Definition of "agent wake"
+
+An agent is "woken" when a new event appears in their `agent-watch.sh` queue. Events:
+- `issue_assigned` — `agent:<role>` + `status:ready|in-progress` (Issue #113 silent-drop closure)
+- `pr_review_requested` — `cc:<role>` on an open PR
+- `pr_comment_mention` — `@<role>` mention in a PR comment
+- `label_change` — orchestrator-only lens for board sync
+
+On wake, the agent re-reads `.claude/CLAUDE.md` (this file) + their own soul file, re-queries GitHub for ground truth, and takes the prescribed action per the autonomy loop.
+
+---
+
+*Rendered from `CLAUDE.md.tmpl` by `scripts/dev-studio-init.sh` (ADR-0013, ADR-0050). 6 placeholders resolved at init time: `{{REPO_ROOT}}`, `{{GITHUB_OWNER}}`, `{{GITHUB_REPO}}`, `{{HUMAN_OWNER_NAME}}`, `{{PROJECT_NAME}}`, `{{HEARTBEAT_DIR}}`. To change doctrine, edit the `.tmpl` source and re-run init.*
