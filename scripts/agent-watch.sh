@@ -84,7 +84,7 @@
 #   heartbeat is stale, so silent watcher death is impossible to miss.
 #
 # Usage:
-#   agent-watch.sh <role> [--once|--loop] [--repo owner/repo1,owner/repo2]
+#   agent-watch.sh <role> [--once|--loop] [--repo owner/repo1,...] [--org <name>]
 #
 # Multi-repo polling (ADR-0047 Part 1, Issue #422 Sprint 11 P1):
 #   --repo owner/repo1,owner/repo2   Comma-separated list; per-repo sub-query,
@@ -96,7 +96,25 @@
 #               fallback ("atilproject/AtilCalculator").
 #   Back-compat: no flag + no env = single-repo (current repo) only.
 #
+# Org-wide polling (RETRO-023 cross-repo sister-pattern discovery, Issue cycle ~#1825):
+#   --org <name>              GitHub ORG name; fetch all non-archived repos from
+#                             `gh api /orgs/<name>/repos` and APPEND them to
+#                             REPOS[] (deduplicating against any explicit --repo
+#                             entries). Makes org-wide workstream discovery
+#                             feasible for cross-repo sister-pattern trackers.
+#   AGENT_WATCH_ORG=<name>    Env-var equivalent (used when --org absent).
+#                             Defaults to "atilproject" (per owner directive
+#                             2026-07-15T06:42Z — sister-mirror of AtilCalculator
+#                             d1041 in PR #1085). Set AGENT_WATCH_ORG="" to
+#                             disable org-scan fallback (single-repo behavior).
+#   Archived repos: SKIPPED by default. Set AGENT_WATCH_INCLUDE_ARCHIVED=1 to
+#                  include (noise reduction; archived repos don't get fresh traffic).
+#   Precedence: --org flag > AGENT_WATCH_ORG > (no org-scan)
+#
 # Env:
+#   AGENT_WATCH_ORG=<name>    ORG name for cross-repo sister-pattern discovery.
+#                             Default: "atilproject". Set to "" to disable.
+#   AGENT_WATCH_INCLUDE_ARCHIVED=1  Include archived repos in org-scan (default 0).
 #   WAKE_PANE=1   — when new_events > 0, send a wake-up prompt to the role's
 #                   tmux pane via `tmux send-keys`. Auto-enabled in --loop mode.
 #                   Override with WAKE_PANE=0 to disable.
@@ -162,9 +180,16 @@ WAKE_PANE_DEFAULT=0
 [ "$MODE" = "--loop" ] && WAKE_PANE_DEFAULT=1
 WAKE_PANE="${WAKE_PANE:-$WAKE_PANE_DEFAULT}"
 
+# --- ORG-wide scan defaults (sister-mirror of AtilCalculator d1041) ---
+# Owner directive 2026-07-15T06:42Z: org-scan default = atilproject so cross-repo
+# sister-pattern discovery (RETRO-023 codifier) works without per-clone env setup.
+# Disable by exporting AGENT_WATCH_ORG="" before invocation.
+AGENT_WATCH_ORG="${AGENT_WATCH_ORG:-atilproject}"
+ORG_FLAG=""
+
 if [ -z "$ROLE" ] || [ "$ROLE" = "--help" ] || [ "$ROLE" = "-h" ]; then
   cat <<'USAGE' >&2
-Usage: agent-watch.sh <role> [--once|--loop] [--repo owner/repo1,owner/repo2]
+Usage: agent-watch.sh <role> [--once|--loop] [--repo owner/repo1,...] [--org <name>]
 
 Arguments:
   <role>                    Role to poll for (developer, orchestrator, architect,
@@ -176,9 +201,16 @@ Arguments:
                             stream. Overrides AGENT_WATCH_REPOS env var.
                             Examples: --repo owner/repo1,owner/repo2
                                       --repo <owner>/<repo>
+  --org <name>              GitHub ORG name; fetch all non-archived repos from
+                            `gh api /orgs/<name>/repos` and merge into REPOS[].
+                            Cross-repo sister-pattern discovery (RETRO-023).
+                            Sister-mirror of AtilCalculator d1041 (PR #1085).
 
 Environment:
   AGENT_WATCH_REPOS         Comma-separated REPO list (used when --repo absent)
+  AGENT_WATCH_ORG=<name>    ORG name (used when --org absent). Default: atilproject.
+                            Set to "" to disable org-scan (single-repo back-compat).
+  AGENT_WATCH_INCLUDE_ARCHIVED=1  Include archived repos in org-scan (default 0).
   GITHUB_REPO               Single-repo fallback (legacy; --repo / AGENT_WATCH_REPOS
                             take precedence)
   WAKE_PANE=1               Send tmux wake-up prompt on new_events > 0
@@ -226,6 +258,15 @@ while [ "$ARG_IDX" -le "$#" ]; do
       REPO_FLAG="${arg#--repo=}"
       ARG_IDX=$((ARG_IDX + 1))
       ;;
+    --org)
+      next_idx=$((ARG_IDX + 1))
+      ORG_FLAG="${!next_idx:-}"
+      ARG_IDX=$((ARG_IDX + 2))
+      ;;
+    --org=*)
+      ORG_FLAG="${arg#--org=}"
+      ARG_IDX=$((ARG_IDX + 1))
+      ;;
     *)
       ARG_IDX=$((ARG_IDX + 1))
       ;;
@@ -253,14 +294,14 @@ elif git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 # Last-resort fallback (Issue #238 sub-task 2 emergency fix lineage): source
 # ~/.dev-studio-env (AC3 contract from STORY-S21-010 / Issue #642) to pick up
-# GITHUB_REPO, then fail loud if still unset. No hardcoded repo literal — clone
-# projects must set their own value via dev-studio-init.sh.
-if [ -z "$REPOS_RAW" ]; then
+# GITHUB_REPO, then fail loud if still unset. Skip when --org / AGENT_WATCH_ORG
+# is set (org-scan populates REPOS[] downstream at the org-scan block).
+if [ -z "$REPOS_RAW" ] && [ -z "$ORG_FLAG" ] && [ -z "${AGENT_WATCH_ORG:-}" ]; then
   [ -f "${HOME}/.dev-studio-env" ] && . "${HOME}/.dev-studio-env" 2>/dev/null || true
   REPOS_RAW="${GITHUB_REPO:-}"
 fi
-if [ -z "$REPOS_RAW" ]; then
-  echo "ERROR: REPOS_RAW is empty; set --repo, AGENT_WATCH_REPOS, GITHUB_REPO (~/.dev-studio-env), or run dev-studio-init.sh first" >&2
+if [ -z "$REPOS_RAW" ] && [ -z "$ORG_FLAG" ] && [ -z "${AGENT_WATCH_ORG:-}" ]; then
+  echo "ERROR: REPOS_RAW is empty; set --repo, --org, AGENT_WATCH_REPOS, AGENT_WATCH_ORG, GITHUB_REPO (~/.dev-studio-env), or run dev-studio-init.sh first" >&2
   exit 2
 fi
 
@@ -284,14 +325,61 @@ if [ -n "$REPO_INVALID" ]; then
   exit 2
 fi
 
-if [ "${#REPOS[@]}" -eq 0 ]; then
-  echo "ERROR: cannot determine repo. Set GITHUB_REPO=owner/name, AGENT_WATCH_REPOS, or run inside repo." >&2
+if [ "${#REPOS[@]}" -eq 0 ] && [ -z "$ORG_FLAG" ] && [ -z "${AGENT_WATCH_ORG:-}" ]; then
+  echo "ERROR: cannot determine repo. Set GITHUB_REPO=owner/name, AGENT_WATCH_REPOS, --org <name>, AGENT_WATCH_ORG, or run inside repo." >&2
   exit 4
+fi
+
+# --- ORG-wide scan (RETRO-023 cross-repo sister-pattern discovery) ---
+# When --org or AGENT_WATCH_ORG is set, enumerate all non-archived repos in
+# the org via `gh api /orgs/<org>/repos` and APPEND them to REPOS[] (dedup
+# against any explicit --repo entries). Sister-mirror of AtilCalculator
+# d1041 (PR #1085) + d1042 line-339 fix; same default = "atilproject" per
+# owner directive 2026-07-15T06:42Z.
+#
+# Per-page: 100 (max). Pagination: for orgs with >100 non-archived repos we'd
+# need to follow Link headers — defer to a future sprint if any active org
+# crosses that threshold (atilproject currently has 5 non-archived repos).
+if [ -n "$ORG_FLAG" ] || [ -n "${AGENT_WATCH_ORG:-}" ]; then
+  ORG_RESOLVED="${ORG_FLAG:-${AGENT_WATCH_ORG}}"
+  if [[ ! "$ORG_RESOLVED" =~ ^[A-Za-z0-9]([A-Za-z0-9-]{0,38}[A-Za-z0-9])?$ ]]; then
+    echo "ERROR: invalid --org format: '$ORG_RESOLVED' (expected GitHub org slug)" >&2
+    exit 2
+  fi
+  ORG_REPOS_JSON="$(gh api "/orgs/${ORG_RESOLVED}/repos?per_page=100&type=all" 2>/dev/null || true)"
+  if [ -z "$ORG_REPOS_JSON" ] || ! echo "$ORG_REPOS_JSON" | jq -e . >/dev/null 2>&1; then
+    echo "ERROR: --org '$ORG_RESOLVED' fetch failed (gh api /orgs/.../repos)" >&2
+    exit 2
+  fi
+  # Build set of existing REPOS[] for dedup; iterate org repos and append
+  # non-archived entries not already in REPOS[].
+  declare -A _seen_repos=()
+  if [ "${#REPOS[@]}" -gt 0 ]; then
+    for r in "${REPOS[@]}"; do _seen_repos["$r"]=1; done
+  fi
+  ORG_ADDED=0
+  while IFS=$'\t' read -r full_name archived; do
+    [ "$archived" = "true" ] && [ "${AGENT_WATCH_INCLUDE_ARCHIVED:-0}" != "1" ] && continue
+    [ -n "${_seen_repos[$full_name]:-}" ] && continue
+    REPOS+=("$full_name")
+    _seen_repos["$full_name"]=1
+    ORG_ADDED=$((ORG_ADDED + 1))
+  done < <(echo "$ORG_REPOS_JSON" | jq -r '.[] | [.full_name, (.archived|tostring)] | @tsv')
+  unset _seen_repos
+  # Refresh REPO back-compat var in case REPOS[] was empty before org scan.
+  if [ "${#REPOS[@]}" -gt 0 ]; then
+    REPO="${REPOS[0]}"
+  fi
+  echo "[--org $ORG_RESOLVED] appended $ORG_ADDED non-archived repos; REPOS[] total = ${#REPOS[@]}" >&2
 fi
 
 # Back-compat: keep single REPO var for non-iterative call sites (e.g.
 # query_proactive_sweep env export, gh pr view for individual PR lookups).
-REPO="${REPOS[0]}"
+#
+# Guarded with :- default expansion (sister to AtilCalculator d1042) so
+# set -euo pipefail does not fire when REPOS[] is empty pre-org-scan. The
+# org-scan block above populates REPOS[] and refreshes REPO from REPOS[0].
+REPO="${REPOS[0]:-}"
 
 # gh_all_repos <out_var> <gh_subcmd> [args...]
 # Runs <gh_subcmd> [args...] --repo <each> for every repo in REPOS, merges
@@ -328,7 +416,7 @@ require_gh
 "$STATE_HELPER" init "$ROLE" >/dev/null
 
 POLL_INTERVAL="$("$STATE_HELPER" get "$ROLE" poll_interval_sec)"
-POLL_INTERVAL="${POLL_INTERVAL:-60}"
+POLL_INTERVAL="${POLL_INTERVAL:-180}"
 
 # v3.4 (issue #61 fix): HWM refresh on every poll.
 #
