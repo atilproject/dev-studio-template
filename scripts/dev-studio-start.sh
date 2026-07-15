@@ -146,7 +146,7 @@ else
   KICKOFF_PROMPT="Read .claude/agents/${role}.md and CLAUDE.md. Check $HEARTBEAT_DIR/agent-state/${role}.json for pending events. Act on events or wait for next watcher poll."
 fi
 
-claude --dangerously-skip-permissions --agent "${role}" --append-system-prompt-file "$REPO_ROOT/.claude/agents/${role}.md" "\$KICKOFF_PROMPT"
+claude --dangerously-skip-permissions --append-system-prompt-file "$REPO_ROOT/.claude/agents/${role}.md" "\$KICKOFF_PROMPT"
 
 exec bash
 EOF
