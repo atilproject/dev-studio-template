@@ -136,7 +136,27 @@ for role in $ROLES; do
     --json number,title,updatedAt 2>/dev/null)" || { echo "ERROR: gh API error (WIP query for $role)" >&2; exit 2; }
 
   wip_count="$(echo "$wip_issues" | jq 'length')"
-  [ "$wip_count" -eq 0 ] && continue
+  # Issue #117 fix (sister-pattern to calc Issue #1091 BUG fix in
+  # calc scripts/wip-idle-detect.sh): any active WIP = NOT idle
+  # (override activity-signal check). Self-referential FP prevention
+  # (calc live instance cycle ~#2272 orchestrator-captured): claim via
+  # `gh issue edit --add-label status:in-progress` does NOT count as a
+  # 'comment' signal (signal 2 misses label flip); just-claimed issue has
+  # no linked PR yet (signal 1 = -1 missing); no commits on PR (signal 3
+  # = -1 missing) → all 3 signals missing → is_idle=true → flagged idle
+  # within minutes of claim. Fix per Issue #1091 body points 1+2 (mirrored
+  # here as Issue #117 sister-fix):
+  #   1. Cross-check status:in-progress label before flagging idle
+  #   2. If role has ≥1 status:in-progress + agent:<role>, NOT flag idle
+  # Sister-pattern: calc d1091 d-test + calc PR #1101 (squash-READY cycle
+  # ~#2305) + calc d1088 (query_stale_verdict owner-gate exemption) +
+  # calc d1081 (claim-next-ready RETRO-024 silent-skip predicate).
+  # Doctrinel class: heuristic-gap that conflates "no recent activity"
+  # with "no active work" when the activity-signal taxonomy misses a
+  # state-change primitive.
+  if [ "$wip_count" -gt 0 ]; then
+    continue  # active WIP = NOT idle (override activity-signal check)
+  fi
 
   # For each WIP issue, check activity signals
   idle_issues_json="[]"
