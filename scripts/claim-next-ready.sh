@@ -193,6 +193,57 @@ fi
   # invocations can detect dead PIDs (sister to PR #825 flock mutex).
   printf '%s\n' "$$" > "$PID_FILE" 2>/dev/null || true
 
+# --- gh API helper (tmpl Issue #116 RED → GREEN impl; d116 d-test) ---
+# Sister-pattern: calc scripts/claim-next-ready.sh _gh_api_with_retry
+# (calc Issue #1089, calc PR #1099, calc d1082 d-test, cycle ~#2305 squash-ready).
+# Wraps `gh api <url> --jq <filter>` with 3-attempt retry-with-exponential-backoff
+# (sleep 1, 2, 5 seconds between attempts). Distinguishes deterministic client
+# errors (HTTP 401/403/404) — fail-fast NO retry — from transient/network
+# failures (5xx, brownouts, rate-limit) — retry with backoff. Surfaces stderr
+# on final failure (RETRO-005 #26 hygiene: no `2>/dev/null` swallowing).
+# Returns 4 (gh API error code per script-level exit-code matrix) on final failure.
+_gh_api_with_retry() {
+  local url="$1"
+  local jq_filter="$2"
+  local max_attempts=3
+  local backoff_seq="1 2 5"
+  local attempt=1
+  local stderr_file result exit_code stderr_content sleep_sec
+
+  while [ "$attempt" -le "$max_attempts" ]; do
+    stderr_file="$(mktemp)"
+    if result="$(gh api "$url" --jq "$jq_filter" 2>"$stderr_file")"; then
+      rm -f "$stderr_file"
+      printf '%s' "$result"
+      return 0
+    fi
+    exit_code=$?
+    stderr_content="$(cat "$stderr_file" 2>/dev/null || echo "")"
+    rm -f "$stderr_file"
+
+    # 4xx detection (HTTP 401/403/404): deterministic client errors → fail-fast.
+    # gh CLI standard format: "gh: Bad credentials (HTTP 401)" / "(HTTP 404)".
+    # Mock + real stderr both contain "401"/"403"/"404" substring.
+    if echo "$stderr_content" | grep -qE "(401|403|404)"; then
+      echo "ERROR: gh API 4xx error (no retry, fail-fast): $stderr_content" >&2
+      return 4
+    fi
+
+    # Transient (5xx / network / rate-limit) — retry with backoff.
+    if [ "$attempt" -lt "$max_attempts" ]; then
+      sleep_sec="$(echo "$backoff_seq" | cut -d' ' -f"$attempt")"
+      echo "WARN: gh API transient failure (attempt $attempt/$max_attempts), retrying in ${sleep_sec}s: $stderr_content" >&2
+      sleep "$sleep_sec"
+    else
+      echo "ERROR: gh API error after $max_attempts attempts: $stderr_content" >&2
+    fi
+
+    attempt=$((attempt + 1))
+  done
+
+  return 4
+}
+
 if [ "$WIP_COUNT_ONLY" = "true" ] && { [ "$ROLE" = "*" ] || [ "$ROLE" = "global" ]; }; then
   # Issue #806: gh issue list --label silent-drop — switch to REST gh api
   # (sister-pattern: scripts/agent-watch.sh L1778-1779 Katman 1 count)
@@ -202,16 +253,18 @@ if [ "$WIP_COUNT_ONLY" = "true" ] && { [ "$ROLE" = "*" ] || [ "$ROLE" = "global"
   # arch RCA cmt 4882811076). Client-side jq filter `select(.pull_request == null)`
   # is the correct exclusion mechanism — real issues have pull_request=null,
   # PRs have pull_request != null. Fix lands v2 d827 (PR #832) RED → GREEN.
-  in_progress_json="$(gh api \
+  # tmpl Issue #116: gh API retry-with-backoff via _gh_api_with_retry (d116 d-test).
+  in_progress_json="$(_gh_api_with_retry \
     "repos/${REPO}/issues?labels=status:in-progress&state=open&per_page=100" \
-    --jq "[.[] | select(.pull_request == null) | {number, labels: [.labels[] | {name}]}]" 2>/dev/null)" || { echo "ERROR: gh API error (WIP query)" >&2; exit 4; }
+    "[.[] | select(.pull_request == null) | {number, labels: [.labels[] | {name}]}]")" || exit 4
 else
   # Issue #806: gh issue list --label silent-drop — switch to REST gh api
   # Issue #831 DESIGN-DRIFT: client-side jq filter on PR exclusion
   # (URL `pull_request=false` is a no-op per arch RCA cmt 4882811076).
-  in_progress_json="$(gh api \
+  # tmpl Issue #116: gh API retry-with-backoff via _gh_api_with_retry (d116 d-test).
+  in_progress_json="$(_gh_api_with_retry \
     "repos/${REPO}/issues?labels=agent:${ROLE},status:in-progress&state=open&per_page=100" \
-    --jq "[.[] | select(.pull_request == null) | {number, labels: [.labels[] | {name}]}]" 2>/dev/null)" || { echo "ERROR: gh API error (WIP query)" >&2; exit 4; }
+    "[.[] | select(.pull_request == null) | {number, labels: [.labels[] | {name}]}]")" || exit 4
 fi
 issue_count="$(printf '%s' "$in_progress_json" | jq 'length' 2>/dev/null || echo 0)"
 
