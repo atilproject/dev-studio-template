@@ -32,6 +32,22 @@
 
 ---
 
+## d1138 — Issue #123 / ADR-0066 Fix 4b template forward-port ✅ ACTIVE
+
+| Field | Value |
+|---|---|
+| **Story** | [Issue #123](https://github.com/atilproject/dev-studio-template/issues/123) — `[forward-port][Sprint 31 cluster-squash][agent-wake-fix-4b]` |
+| **Source-of-truth sister** | `AtilCalculator/scripts/tests/d1138-agent-wake-fix-4b-lenient-verify.sh` (PR #1140 MERGED b0012d6 20:03:11Z) |
+| **Test file** | `scripts/tests/d1138-template-agent-wake-fix-4b.sh` |
+| **Production file (target)** | `scripts/agent-wake.sh` (Fix 4b impl sister PR — developer lane, separate cluster-squash PR per ADR-0059) |
+| **TCs** | **6 TCs (RED-first per ADR-0044 baseline ≥3 + ≥5 with sister-pattern met):** TC1 `WAKE_VERIFY_TIMEOUT_SEC` env override honored via fake-tmux log (RED pre-impl — script hardcodes `timeout 1`); TC2 `VERIFY_SENTINEL="🔔 INBOX (dual-c"` 16-char literal present in scripts/agent-wake.sh (RED pre-impl — uses dynamic MSG_PREFIX); TC2.old-prefix-removed — old Fix 3 MSG_PREFIX derivation block removed (RED pre-impl — block still present); TC3 send-keys OK + verify OK → rc=0 happy-path preserved (RED pre-impl — false failure on long msgs); TC4 send-keys OK + verify FAIL → rc=0 + WARN hierarchical leniency (RED pre-impl — hard-fail rc=1); TC4.no-error — no send-keys ERROR on verify-FAIL (GREEN pre-impl — preserved); TC5 send-keys FAIL → rc=1 + ERROR regression guard (GREEN pre-impl — preserved); TC5.stderr/no-warn — tier separation preserved; TC6 bash -n syntactic validity baseline (GREEN pre-impl — preserved); TC6.shellcheck bonus |
+| **Sister-pattern** | `d1138-agent-wake-fix-4b-lenient-verify.sh` (AtilCalculator DIRECT sister, byte-identical test design); `d024-agent-wake.sh` (tmpl local — pre-existing ADR-0033 dual-channel wake regression test, grep-assertion idiom); `d862` (fake-gh-in-PATH pattern); `d068b` (WAKE_KEYS_GAP_SEC env-override naming convention — DIRECT sister-pattern for D1); `d058` (claim-next-ready fake-gh factory); `d1025-s29-template-agent-wake-hotfix-port.sh` (Phase B sister — Issue #1063 hotfix template-port precedent); ≥2 sister-pattern coverage per ADR-0049 §Sister-pattern met (d1138 calc + d024 tmpl + d068b = 3 members) |
+| **Run** | `bash scripts/tests/d1138-template-agent-wake-fix-4b.sh` |
+| **Cadence Rule 1 atomic** | Single-commit cluster: `scripts/tests/d1138-template-agent-wake-fix-4b.sh` (new, ~360 LOC) + `scripts/tests/INDEX.md` (this entry). Production file `scripts/agent-wake.sh` impl is SEPARATE PR per ADR-0059 cluster-squash doctrine (developer lane, scoped per cycle ~#2924 orchestrator directive) |
+| **Cross-references** | Issue #123 (tmpl forward-port coord, AC1 = this d-test landed), AtilCalculator Issue #1138 (origin, AC5 = this issue MERGED closes Cadence Rule 2 loop), AtilCalculator PR #1140 (source sister-PR, MERGED b0012d6), AtilCalculator PR #1141 (impl Fix 4b sister-PR, MERGED 6c90d47d 20:07:55Z), AtilCalculator PR #1139 (ADR-0066 docs sister-PR, MERGED e2e31c4a 19:49:04Z), ADR-0066 (Fix 4b doctrinal basis), RETRO-027 / Issue #1130 / PR #1137 (Cadence Rule 2 retroactive-close precondition), tmpl#94 (earlier agent-wake-hotfix Phase B, template-port precedent), tmpl#122 / Issue #121 (most recent Sprint 31 forward-port cluster, coord-issue precedent) |
+
+---
+
 ## s29-005 — STORY-S29-005 verify-portage script ✅ ACTIVE
 
 | Field | Value |
