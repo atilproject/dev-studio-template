@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# scripts/deploy-runner.sh — generic deploy-runner for dev-studio-template (ADR-0047)
+# scripts/deploy-runner.sh — generic deploy-runner for dev-studio-template (ADR-0101)
 #
 # Why this script exists
 # ----------------------
@@ -8,7 +8,7 @@
 #   - No hardcoded service name, module path, port, or healthz path
 #   - 4 required env vars (SERVICE_NAME, MODULE_PATH, DEPLOY_PORT, HEALTHZ_PATH)
 #   - 1 optional env var (PROD_HOSTNAME — warn-only validation, lens g)
-#   - nohup+setsid restart pattern (NOT systemctl --user) — per ADR-0047 §Decision.2
+#   - nohup+setsid restart pattern (NOT systemctl --user) — per ADR-0101 §Decision.2
 #
 # Sister script: atilcan65/AtilCalculator scripts/deploy-runner.sh (v9.1, RCA-7/9/11/12/14
 #                hardening preserved; the AtilCalc-specific service name + module path
@@ -20,11 +20,11 @@
 #   - AtilCalculator RCA-7/9/11/12/14/16 hardening (FAIL-or-CREATE preflight,
 #     cross-user port check, post-restart etimes check, idempotent converge)
 #
-# Test cases (per ADR-0047 §Decision.3 + §Decision.4):
+# Test cases (per ADR-0101 §Decision.3 + §Decision.4):
 #   d046-deploy-runner-env-validation.sh: 8 TCs (env-var fail-loud contract)
 #   d047-deploy-runner-smoke-test.sh:      6 TCs (smoke-test + rollback contract)
 #
-# Exit codes (per ADR-0047 §Decision.5):
+# Exit codes (per ADR-0101 §Decision.5):
 #   0  — smoke test passed, prod running the expected SHA
 #   1  — smoke test failed but rollback succeeded; deploy should be retried
 #   2  — smoke test failed AND rollback failed; owner paged, manual fix needed
@@ -48,7 +48,7 @@ fail() { log "ERROR: $*"; exit "${2:-1}"; }
 
 # --- 1. Required env-var validation (lens d fail-loud contract, d046 T1-T4) ---
 # Explicit checks (NOT `: "${X:?msg}"`) because bash's `${X:?msg}` exits with
-# default code 1, but ADR-0047 §Decision.5 documents exit 3 for usage errors.
+# default code 1, but ADR-0101 §Decision.5 documents exit 3 for usage errors.
 # Use `fail "..." 3` to pin the exit code per the contract.
 if [[ -z "${SERVICE_NAME:-}" ]]; then fail "SERVICE_NAME required (e.g., myapp-web)" 3; fi
 if [[ -z "${MODULE_PATH:-}" ]]; then fail "MODULE_PATH required (e.g., myapp.api.main:app)" 3; fi
@@ -106,7 +106,7 @@ if [[ "$DRY_RUN" == "true" ]]; then
   log "DRY-RUN: step 1: cd $REPO_DIR && git fetch origin && git reset --hard origin/main"
   log "DRY-RUN: step 2: preflight — ensure .venv exists (FAIL-or-CREATE pattern, ADR-0027 RCA-9)"
   log "DRY-RUN: step 3: preflight — uv pip install -p .venv -e . (RCA-7-4 stale deps)"
-  log "DRY-RUN: step 4: restart — pkill uvicorn + nohup setsid .venv/bin/uvicorn $MODULE_PATH --host \$DEPLOY_BIND_HOST --port \$DEPLOY_PORT (nohup+setsid per ADR-0047 §Decision.2)"
+  log "DRY-RUN: step 4: restart — pkill uvicorn + nohup setsid .venv/bin/uvicorn $MODULE_PATH --host \$DEPLOY_BIND_HOST --port \$DEPLOY_PORT (nohup+setsid per ADR-0101 §Decision.2)"
   log "DRY-RUN: step 5: smoke test GET $HEALTHZ_URL (expecting git_sha=$GITHUB_SHA)"
   log "DRY-RUN: step 6 (on smoke-test failure): git reset --hard HEAD@{1} + restart + retry"
   log "DRY-RUN: step 7 (on double failure): page owner via scripts/notify.sh -l human"
@@ -160,7 +160,7 @@ fi
 
 # --- 10. Step 3: preflight detect service port conflict (RCA-12 cross-user check) ---
 restart_service() {
-  log "Restarting $SERVICE_NAME via nohup+setsid (ADR-0047 §Decision.2 — generic, no systemd dependency)"
+  log "Restarting $SERVICE_NAME via nohup+setsid (ADR-0101 §Decision.2 — generic, no systemd dependency)"
 
   # RCA-12 pre-check: detect cross-user port conflict before pkill
   pre_port_pid=""
@@ -197,7 +197,7 @@ restart_service() {
   fi
 
   # Post-deploy: start the service via nohup+setsid
-  log "Starting: nohup setsid .venv/bin/uvicorn $MODULE_PATH --host $DEPLOY_BIND_HOST --port $DEPLOY_PORT (ADR-0047 §Decision.2)"
+  log "Starting: nohup setsid .venv/bin/uvicorn $MODULE_PATH --host $DEPLOY_BIND_HOST --port $DEPLOY_PORT (ADR-0101 §Decision.2)"
   if [[ -d "$REPO_DIR/.venv" ]]; then
     nohup setsid "$REPO_DIR/.venv/bin/uvicorn" "$MODULE_PATH" --host "$DEPLOY_BIND_HOST" --port "$DEPLOY_PORT" \
       > /tmp/deploy-uvicorn.log 2>&1 < /dev/null &

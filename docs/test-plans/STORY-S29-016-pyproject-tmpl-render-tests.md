@@ -18,7 +18,7 @@ Until S29-018 lands, **this file is the de facto skeleton template** — sister-
 - Issue #1077 (S29-018 P1) — docs sub-dir skeletons forward-port
 - Issue #1076 (S29-017 P1) — calctl CLI surface + d-tests (gap-closing in dev lane, blockers S29-019)
 - Issue #1078 (S29-019 P2) — calculator RPC HTTP surface + d-tests
-- **Template-side ADRs (load-bearing)**: ADR-0046 (d-test convention), ADR-0049 (d-test framework ≥5 TCs baseline, ≥3 sister-patterns), ADR-0040 (cross-repo-pr-auto-close), ADR-0059 (cluster-squash)
+- **Template-side ADRs (load-bearing)**: ADR-0100 (d-test convention), ADR-0049 (d-test framework ≥5 TCs baseline, ≥3 sister-patterns), ADR-0040 (cross-repo-pr-auto-close), ADR-0059 (cluster-squash)
 - **Calc-side ADRs (cross-reference only)**: ADR-0044 (RED-first TDD — calc-side doctrinal home), ADR-0055 §1 (Cadence Rule 1 atomic — calc-side; template-side equivalent is ADR-0049 d-test framework + the established cluster pattern), ADR-0045 (9-Lens pre-publish — calc-side; arch applied 9-Lens to PR #104 cycle #1832, surfaced NIT-1/NIT-2/NIT-3/NIT-4 hygiene findings)
 - **NIT-1 corrections (per arch 9-Lens PR #104 review, cycle #1832)**: ADR-0050 ≠ render path doctrine (actual: `pre-merge-4-cat-verification.md`); ADR-0057 ≠ cross-repo anchor convention (actual: `closes-anchor-guard.md`). Both incorrectly cited in initial commit; corrected in this revision.
 
@@ -42,7 +42,7 @@ Until S29-018 lands, **this file is the de facto skeleton template** — sister-
 
 ## d-test architecture (per Issue #1071 fixture gap doctrine)
 
-d-test must satisfy ADR-0049 ≥5 TCs baseline + ≥3 sister-patterns + ADR-0046 d-test convention (template-side). d1027 ships 6 TCs + TC0 preflight:
+d-test must satisfy ADR-0049 ≥5 TCs baseline + ≥3 sister-patterns + ADR-0100 d-test convention (template-side). d1027 ships 6 TCs + TC0 preflight:
 
 | TC  | Purpose | Sister-pattern reference |
 |-----|---------|--------------------------|
@@ -65,7 +65,7 @@ FAIL: 6 (TC1: 3/3 template files absent, TC2: parse fails on missing file, TC3: 
 
 Post-impl (when architect lands `pyproject.toml.tmpl` + `LICENSE.tmpl` + `.template-version.tmpl` + extends `dev-studio-init.sh` to render all 3): all 6 TCs GREEN.
 
-## Cadence Rule 1 atomic per ADR-0049 + ADR-0046 (template-side equivalents of calc-side ADR-0055 §1) — single-commit cluster
+## Cadence Rule 1 atomic per ADR-0049 + ADR-0100 (template-side equivalents of calc-side ADR-0055 §1) — single-commit cluster
 
 PR must include:
 1. `scripts/tests/d1027-s29-016-template-pyproject-render.sh` (NEW, ~270 LOC, 6 TCs + TC0 preflight)
@@ -87,20 +87,20 @@ All 4 land in same commit per Cadence Rule 1.
 
 **Template-side ADRs (load-bearing, all verified to exist on template `docs/decisions/` per arch 9-Lens PR #104 cycle #1832)**:
 - **ADR-0040** (cross-repo-pr-auto-close — bridges `Closes atilcan65/AtilCalculator#1075` syntax)
-- **ADR-0046** (d-test convention — structural requirements: `set -uo pipefail`, "Why this d-test exists" narrative ≥2-5 lines, PASS/FAIL counters, TC0 preflight, standalone run command)
+- **ADR-0100** (d-test convention — structural requirements: `set -uo pipefail`, "Why this d-test exists" narrative ≥2-5 lines, PASS/FAIL counters, TC0 preflight, standalone run command)
 - **ADR-0049** (d-test framework — ≥5 TCs baseline + ≥3 sister-pattern baseline + same-commit cluster rule)
 - **ADR-0059** (cluster-squash — d-test ships BEFORE impl, sister-PR must land same merge-day as calc-side)
 - **ADR-0031** (owner merge gate — only human squash-merges impl PR; load-bearing for Phase B)
 
 **Calc-side ADRs (cross-reference only, NOT load-bearing on template side)**:
-- **ADR-0044** (RED-first TDD — calc-side doctrinal home; template-side equivalent is ADR-0046 + ADR-0049 cluster)
+- **ADR-0044** (RED-first TDD — calc-side doctrinal home; template-side equivalent is ADR-0100 + ADR-0049 cluster)
 - **ADR-0055 §1** (Cadence Rule 1 atomic — calc-side; template-side equivalent is ADR-0049 d-test framework)
 - **ADR-0045** (9-Lens pre-publish — calc-side; arch applied 9-Lens to PR #104 cycle #1832, surfaced NIT-1/NIT-2/NIT-3/NIT-4)
 
 **NIT-1 corrections (arch 9-Lens cycle #1832, applied in this revision)**:
 - ADR-0050 ≠ ".claude/CLAUDE.md.tmpl render path doctrine" — actual content is `pre-merge-4-cat-verification.md` (no render-path mention)
 - ADR-0057 ≠ "Refs cross-repo anchor convention" — actual content is `closes-anchor-guard.md` (covers parser-friendly multi-Closes formats, not cross-repo anchor convention)
-- Both corrected citations removed; load-bearing citations re-aligned to actual template-side ADRs (ADR-0040 + ADR-0046 + ADR-0049)
+- Both corrected citations removed; load-bearing citations re-aligned to actual template-side ADRs (ADR-0040 + ADR-0100 + ADR-0049)
 
 ## Sister-test on this d-test file
 
@@ -112,10 +112,10 @@ After d1027 merges, follow-up sister-d-tests to verify (post-impl):
 ## Lane attribution
 
 - **Test plan author**: @tester (cycle #1708, 2026-07-14) — sister to d1027 d-test authorship
-- **Test plan owner**: @tester (sign-off lane per ADR-0046 d-test convention + ADR-0044 RED-first TDD calc-side ancestor)
+- **Test plan owner**: @tester (sign-off lane per ADR-0100 d-test convention + ADR-0044 RED-first TDD calc-side ancestor)
 - **d-test author**: @tester (this PR)
 - **d-test owner**: @tester
-- **d-test impl handoff**: @architect (post-PR, AC1-AC4 impl — blocked on Phase A GREEN per ADR-0046 + ADR-0044)
+- **d-test impl handoff**: @architect (post-PR, AC1-AC4 impl — blocked on Phase A GREEN per ADR-0100 + ADR-0044)
 
 ## Open follow-ups (out-of-scope for S29-016, defer to S29-020+)
 

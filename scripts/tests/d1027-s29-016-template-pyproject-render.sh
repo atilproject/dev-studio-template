@@ -5,7 +5,7 @@
 # `dev-studio-init.sh` renders all 3 to final files idempotently (AC1-AC4
 # of Issue #1075). Sister-pattern to the existing .claude/CLAUDE.md.tmpl
 # render line in scripts/dev-studio-init.sh; doctrinal home is template-side
-# ADR-0046 (d-test convention) + ADR-0049 (d-test framework) + ADR-0040
+# ADR-0100 (d-test convention) + ADR-0049 (d-test framework) + ADR-0040
 # (cross-repo-pr-auto-close, bridges `Closes atilcan65/AtilCalculator#N`
 # syntax). Calc-side doctrinal ancestors: ADR-0044 (RED-first TDD) +
 # ADR-0055 §1 (Cadence Rule 1 atomic) + ADR-0045 (9-Lens) — cited only for
@@ -18,7 +18,7 @@
 #   TC0: bash -n syntactic self-check (preflight, PASS pre/post — test file exists)
 #   TC1: AC1 + AC2 + AC3 — pyproject.toml.tmpl + LICENSE.tmpl + .template-version.tmpl
 #        all exist at the template root (sister-pattern to .claude/CLAUDE.md.tmpl
-#        render line in dev-studio-init.sh; ADR-0046 d-test convention applies)
+#        render line in dev-studio-init.sh; ADR-0100 d-test convention applies)
 #   TC2: AC1 — pyproject.toml.tmpl is PEP 621-parseable via Python tomllib (after
 #        substituting {{...}} placeholders with sane defaults; static validation only
 #        — sister-pattern to d1020 S29-010 workflow port-parity TOML parse)
@@ -54,7 +54,7 @@
 # drift-prevention marker (S21-007 doctrine). Arch v3 audit §C Gap 1
 # confirms this is CRITICAL BLOCKER.
 #
-# RED-first per ADR-0046 (d-test convention, template-side) + ADR-0049
+# RED-first per ADR-0100 (d-test convention, template-side) + ADR-0049
 # (d-test framework, template-side): pre-impl on current template main,
 # all 6 substantive TC fail (TC1: 3/3 files absent; TC2: parse fails on
 # missing file; TC3: MIT text absent; TC4: semver absent; TC5: --dry-run
@@ -300,7 +300,7 @@ printf "  FAIL: %d\n" "$FAIL"
 printf "  Target tested: Issue #1075 (S29-016) — pyproject.toml.tmpl + LICENSE.tmpl + .template-version.tmpl render path\n"
 
 if [ "$FAIL" -gt 0 ]; then
-  printf "\n${R}RED state${D} — pre-impl template main has missing templates + missing render path. Arch scope sign-off received (cmt IC_kwDOS9WE8s8AAAABKHG1LA); impl PR BLOCKED on this RED-first d-test per ADR-0046 (template-side doctrinal home) + ADR-0044 (calc-side doctrinal home for RED-first TDD).\n"
+  printf "\n${R}RED state${D} — pre-impl template main has missing templates + missing render path. Arch scope sign-off received (cmt IC_kwDOS9WE8s8AAAABKHG1LA); impl PR BLOCKED on this RED-first d-test per ADR-0100 (template-side doctrinal home) + ADR-0044 (calc-side doctrinal home for RED-first TDD).\n"
   exit 1
 else
   printf "\n${G}GREEN state${D} — all 5 TCs pass; arch impl landed pyproject.toml.tmpl + LICENSE.tmpl + .template-version.tmpl + idempotent render path. AC5(d) static validation confirms installability per Issue #1075.\n"

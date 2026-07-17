@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# d047-deploy-runner-smoke-test.sh — regression test for ADR-0047 deploy-runner
+# d047-deploy-runner-smoke-test.sh — regression test for ADR-0101 deploy-runner
 # healthz smoke-test contract.
 #
 # Why this test exists
 # --------------------
-# ADR-0047 §Decision.4 requires deploy-runner.sh to perform a healthz smoke test
+# ADR-0101 §Decision.4 requires deploy-runner.sh to perform a healthz smoke test
 # after restart + assert `git_sha == GITHUB_SHA`. The smoke test must:
 #   - Hit the configured HEALTHZ_PATH on the configured DEPLOY_PORT
 #   - Parse JSON response, extract `git_sha` field
@@ -22,7 +22,7 @@
 # Sister test: atilcan65/AtilCalculator scripts/deploy-runner.sh v9.1
 #   (the live production version; template d047 is the standalone regression)
 #
-# Test cases (per ADR-0047 §Decision.4 smoke-test contract, 6 TCs):
+# Test cases (per ADR-0101 §Decision.4 smoke-test contract, 6 TCs):
 #   T1: deploy-runner.sh --dry-run prints smoke-test step in DRY-RUN output
 #   T2: deploy-runner.sh exits 0 in --dry-run when smoke-test would pass
 #   T3: deploy-runner.sh smoke-test step references HEALTHZ_URL env var

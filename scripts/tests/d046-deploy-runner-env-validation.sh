@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# d046-deploy-runner-env-validation.sh — regression test for ADR-0047 deploy-runner
+# d046-deploy-runner-env-validation.sh — regression test for ADR-0101 deploy-runner
 # env-var fail-loud contract.
 #
 # Why this test exists
 # --------------------
-# ADR-0047 (deploy-automation-pattern, per Issue #375 Option A verdict) requires
+# ADR-0101 (deploy-automation-pattern, per Issue #375 Option A verdict) requires
 # `scripts/deploy-runner.sh` to fail-loud with clear `ERROR: <env-var> required`
 # messages when the 4 required env vars are unset:
 #   1. SERVICE_NAME  — systemd unit name (e.g., "myapp-web")
@@ -21,7 +21,7 @@
 #   (AtilCalc d-test covers module-path consistency; template d046 covers
 #    env-var fail-loud contract)
 #
-# Test cases (per ADR-0047 §Decision.3 env-var table, 4 TCs):
+# Test cases (per ADR-0101 §Decision.3 env-var table, 4 TCs):
 #   T1: missing SERVICE_NAME → exit non-zero + stderr contains "SERVICE_NAME"
 #   T2: missing MODULE_PATH → exit non-zero + stderr contains "MODULE_PATH"
 #   T3: missing DEPLOY_PORT → exit non-zero + stderr contains "DEPLOY_PORT"
@@ -76,7 +76,7 @@ else
   fail "missing SERVICE_NAME did not produce clear error" "got: $out"
 fi
 if [[ "$ec" -eq 3 ]]; then
-  pass "missing SERVICE_NAME exits with code 3 (ADR-0047 §Decision.5 contract)"
+  pass "missing SERVICE_NAME exits with code 3 (ADR-0101 §Decision.5 contract)"
 else
   fail "missing SERVICE_NAME exit code drift" "expected 3, got $ec — bash \${X:?msg} exits 1 by default; use explicit fail 3"
 fi

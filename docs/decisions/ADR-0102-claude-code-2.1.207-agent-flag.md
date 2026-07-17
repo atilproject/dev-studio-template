@@ -1,4 +1,4 @@
-# ADR-0060: Claude Code 2.1.207 — Remove `--agent` flag from custom agent invocation
+# ADR-0102: Claude Code 2.1.207 — Remove `--agent` flag from custom agent invocation
 
 - **Status**: Proposed
 - **Date**: 2026-07-14
@@ -119,7 +119,7 @@ Reversible by reverting the single-token change. Pre-2.1.207 versions of Claude 
 ## Cross-references
 
 - **Issue #88** — template-gap-close origin + diagnostic body (this ADR's primary source)
-- **Sprint 29 audit-baseline §20.1** — pre-allocation map that reserved ADR-0060 (now superseded by this ADR)
+- **Sprint 29 audit-baseline §20.1** — pre-allocation map that reserved ADR-0060 (now superseded by this ADR, ADR-0102)
 - **AtilCalculator ADR-0060** (ac-mapping-verification-doctrine) — NOT a sister-pattern (different topic), reference for AC Mapping doctrine canonical home
 - **RETRO-018 W6** — branch-ownership matrix + reservation-repurposing doctrine
 - **RETRO-023** — cross-repo workstream doctrine (forward-port target: AtilCalculator)

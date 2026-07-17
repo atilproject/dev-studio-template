@@ -24,11 +24,11 @@
 #
 # Exit code: 0 = all pass, 1 = at least one fail.
 #
-# Per ADR-0046 d-test convention + ADR-0049 ≥5 TCs baseline. Sister-pattern:
+# Per ADR-0100 d-test convention + ADR-0049 ≥5 TCs baseline. Sister-pattern:
 # AtilCalculator scripts/tests/d972-path-verify-doctrine.sh, d051-dispatch-discipline.sh.
 #
 # Refs: Issue #986, PR #967 §6.2 audit-baseline, ADR-0007 (reversibility),
-# ADR-0046 (d-test convention), ADR-0049 (≥5 TCs baseline), ADR-0055 §1
+# ADR-0100 (d-test convention), ADR-0049 (≥5 TCs baseline), ADR-0055 §1
 # (Cadence Rule 1 atomic per Story).
 
 set -uo pipefail

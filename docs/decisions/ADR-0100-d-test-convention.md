@@ -1,4 +1,4 @@
-# ADR-0046 — d-numbered regression test convention
+# ADR-0100 — d-numbered regression test convention
 
 **Status:** Proposed
 **Date:** 2026-06-23
@@ -164,7 +164,7 @@ follow the rule).
 
 ### Follow-up tickets
 
-1. `@developer`: when authoring a new d-test, follow this ADR's header + body skeleton. Reference ADR-0046 in the PR body.
+1. `@developer`: when authoring a new d-test, follow this ADR's header + body skeleton. Reference ADR-0100 in the PR body.
 2. `@architect`: add `scripts/tests/dNNN-*.sh` to the §Conventions block of `docs/decisions/INDEX.md.tmpl` (link to this ADR).
 3. `@tester`: when reviewing a new d-test, verify: (a) monotonic `NNN` (no reuse), (b) sister-test comment when porting, (c) standalone runnable, (d) TDD red-first narrative in header.
 

@@ -11,7 +11,7 @@
 #   TC0: bash -n syntactic self-check (preflight, PASS pre/post)
 #   TC1: --agent "..." removed from dev-studio-start.sh source (issue #89 spec)
 #   TC2: `claude --help` still lists --agent flag (regression detector — the CLI
-#        didn't remove the flag, just custom-name match per Issue #88 / ADR-0060)
+#        didn't remove the flag, just custom-name match per Issue #88 / ADR-0102)
 #   TC3: bootstrap-generated scripts/.tmux-bootstrap/<role>.sh (5 roles: orch/pm/
 #        arch/dev/tester) contain NO `--agent ` token (issue #89 spec)
 #   TC4: `bash -n scripts/.tmux-bootstrap/*.sh` syntax check passes for all 5
@@ -39,13 +39,13 @@
 # `.claude/agents/<role>.md`. When scripts/dev-studio-start.sh heredoc invokes
 # `claude ... --agent "${role}" ...`, Claude errors with `--agent '<role>' not
 # found` and all 5 tmux panes fall back to a plain shell — losing Claude Code
-# identity loading entirely. ADR-0060 (Issue #88, PR #97 MERGED) codifies the
+# identity loading entirely. ADR-0102 (Issue #88, PR #97 MERGED) codifies the
 # fix: remove `--agent "${role}"` from the bootstrap heredoc; identity continues
 # to load via `--append-system-prompt-file .claude/agents/${role}.md` (already
 # wired, no change needed). This d-test guards the fix on the template side so
 # future `new-project.sh` invocations ship bug-free.
 #
-# RED-first per ADR-0044 (RED-first TDD doctrinal home, calc-side) + ADR-0046
+# RED-first per ADR-0044 (RED-first TDD doctrinal home, calc-side) + ADR-0100
 # (d-test convention, template-side doctrinal home) + ADR-0049 (d-test
 # framework): pre-impl on current template main, TC1+TC3 fail (--agent "..."
 # still present in source + generated bootstrap files); TC2+TC4+TC5 pass.
@@ -103,7 +103,7 @@ if [ -f "$DEV_STUDIO_START" ]; then
   else
     # Surface the offending line(s) for the developer to fix
     offending=$(grep -nE -- '--agent ' "$DEV_STUDIO_START" 2>/dev/null | head -3)
-    fail "dev-studio-start.sh still contains --agent ($agent_count occurrences)" "expected 0 per Issue #89 + ADR-0060; offending lines: $offending — remove the --agent \"\${role}\" arg from the bootstrap heredoc (line ~149)"
+    fail "dev-studio-start.sh still contains --agent ($agent_count occurrences)" "expected 0 per Issue #89 + ADR-0102; offending lines: $offending — remove the --agent \"\${role}\" arg from the bootstrap heredoc (line ~149)"
   fi
 else
   fail "dev-studio-start.sh absent" "Issue #89 spec — scripts/dev-studio-start.sh must exist at template root for the bootstrap launcher"
@@ -115,7 +115,7 @@ fi
 section "TC2: claude --help still lists --agent flag (regression detector)"
 if command -v claude >/dev/null 2>&1; then
   # Match `^  --agent ` (2-space indent + literal `--agent `) to anchor the
-  # CLI's --agent line in the help output. Per ADR-0060 / Issue #88, CLI 2.1.207
+  # CLI's --agent line in the help output. Per ADR-0102 / Issue #88, CLI 2.1.207
   # removed custom-agent-name matching from --agent, but the flag itself is
   # still in claude --help (used for built-in agents). This regression detector
   # catches a scenario where someone "fixes" --agent by removing it entirely
@@ -125,7 +125,7 @@ if command -v claude >/dev/null 2>&1; then
   if [ "$help_agent_count" -ge 1 ]; then
     pass "claude --help still lists --agent flag ($help_agent_count match) — CLI argv surface intact"
   else
-    fail "claude --help no longer lists --agent flag" "expected at least 1 line matching '^  --agent ' per ADR-0060 (CLI 2.1.207 kept --agent as built-in agent selector); if claude actually removed the flag, this d-test needs updating — see ADR-0060 + Issue #88"
+    fail "claude --help no longer lists --agent flag" "expected at least 1 line matching '^  --agent ' per ADR-0102 (CLI 2.1.207 kept --agent as built-in agent selector); if claude actually removed the flag, this d-test needs updating — see ADR-0102 + Issue #88"
   fi
 else
   # Cannot run claude --help (e.g., CI env without CLI installed) — skip with note.
@@ -188,7 +188,7 @@ if [ -f "$DEV_STUDIO_START" ]; then
     # small (<200 bytes), the heredoc aborted mid-write (likely unbound var).
     # This is a defensive TC3.5 check — the issue is real because TC1's grep
     # against dev-studio-start.sh source CAN pass with the heredoc body in
-    # source still containing `--agent ` (per ADR-0060 fix scope: dev-studio-start.sh
+    # source still containing `--agent ` (per ADR-0102 fix scope: dev-studio-start.sh
     # source is fixed; the heredoc body line is what changes). We want TC3 to
     # detect the heredoc body itself, not just source-side grep.
     for f in "$TMUX_BOOT_DIR"/*.sh; do
@@ -259,13 +259,13 @@ section "TC5: --append-system-prompt-file still wired in dev-studio-start.sh her
 if [ -f "$DEV_STUDIO_START" ]; then
   # Positive regression check: ensure the identity-loading flag is still wired.
   # After removing --agent, identity MUST continue to load via
-  # --append-system-prompt-file .claude/agents/${role}.md (per ADR-0060).
+  # --append-system-prompt-file .claude/agents/${role}.md (per ADR-0102).
   append_count=$(grep -c -- '--append-system-prompt-file' "$DEV_STUDIO_START" 2>/dev/null)
   append_count="${append_count:-0}"
   if [ "$append_count" -ge 1 ]; then
     pass "--append-system-prompt-file still wired ($append_count occurrence(s)) — identity loading path intact"
   else
-    fail "--append-system-prompt-file missing from dev-studio-start.sh" "after removing --agent (TC1), --append-system-prompt-file MUST remain wired or agents lose identity — see ADR-0060 + Issue #88"
+    fail "--append-system-prompt-file missing from dev-studio-start.sh" "after removing --agent (TC1), --append-system-prompt-file MUST remain wired or agents lose identity — see ADR-0102 + Issue #88"
   fi
 else
   fail "dev-studio-start.sh absent (skipped)" "Issue #89 spec requires dev-studio-start.sh"
@@ -277,12 +277,12 @@ fi
 printf "\n${B}==== Summary ====${D}\n"
 printf "  PASS: %d\n" "$PASS"
 printf "  FAIL: %d\n" "$FAIL"
-printf "  Target tested: Issue #89 (template-gap-close) + ADR-0060 — remove --agent \"\${role}\" from scripts/dev-studio-start.sh heredoc (CLI 2.1.207 breaking change)\n"
+printf "  Target tested: Issue #89 (template-gap-close) + ADR-0102 — remove --agent \"\${role}\" from scripts/dev-studio-start.sh heredoc (CLI 2.1.207 breaking change)\n"
 
 if [ "$FAIL" -gt 0 ]; then
-  printf "\n${R}RED state${D} — pre-impl template main has --agent \"\${role}\" still in source + bootstrap-generated files. ADR-0060 (Issue #88, PR #97 MERGED) codifies the fix; impl Issue #90 BLOCKED on this RED-first d-test per ADR-0046 (template-side doctrinal home) + ADR-0044 (calc-side doctrinal home for RED-first TDD).\n"
+  printf "\n${R}RED state${D} — pre-impl template main has --agent \"\${role}\" still in source + bootstrap-generated files. ADR-0102 (Issue #88, PR #97 MERGED) codifies the fix; impl Issue #90 BLOCKED on this RED-first d-test per ADR-0100 (template-side doctrinal home) + ADR-0044 (calc-side doctrinal home for RED-first TDD).\n"
   exit 1
 else
-  printf "\n${G}GREEN state${D} — all 5 TCs pass; developer impl landed the --agent \"\${role}\" removal in scripts/dev-studio-start.sh heredoc per ADR-0060. AC1-AC4 of Issue #89 satisfied (5 generated bootstrap files lack --agent, identity path intact, CLI --agent flag still in claude --help as regression detector).\n"
+  printf "\n${G}GREEN state${D} — all 5 TCs pass; developer impl landed the --agent \"\${role}\" removal in scripts/dev-studio-start.sh heredoc per ADR-0102. AC1-AC4 of Issue #89 satisfied (5 generated bootstrap files lack --agent, identity path intact, CLI --agent flag still in claude --help as regression detector).\n"
   exit 0
 fi

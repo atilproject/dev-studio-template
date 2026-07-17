@@ -1,9 +1,9 @@
-# ADR-0047 — Deploy automation pattern (template-port of AtilCalculator ADR-0027 + ADR-0030)
+# ADR-0101 — Deploy automation pattern (template-port of AtilCalculator ADR-0027 + ADR-0030)
 
 **Status:** Proposed
 **Date:** 2026-06-25
 **Supersedes:** —
-**Related:** ADR-0046 (d-test convention — sister), AtilCalculator ADR-0027 (auto-deploy pattern source), AtilCalculator ADR-0030 (self-hosted runner source), AtilCalculator `scripts/deploy-runner.sh` v9.1 (live implementation), Issue #375 (architect design verdict), Issue #198 (parent template-port story)
+**Related:** ADR-0100 (d-test convention — sister), AtilCalculator ADR-0027 (auto-deploy pattern source), AtilCalculator ADR-0030 (self-hosted runner source), AtilCalculator `scripts/deploy-runner.sh` v9.1 (live implementation), Issue #375 (architect design verdict), Issue #198 (parent template-port story)
 
 ---
 
@@ -30,7 +30,7 @@ considered in Issue #375:
 
 | Option | Description | Lens analysis |
 |---|---|---|
-| **A — Light-touch** | Parameterize 4 env vars (SERVICE_NAME, MODULE_PATH, DEPLOY_PORT, HEALTHZ_PATH) + 1 optional (PROD_HOSTNAME). Sister to PR-T9 ADR-0046. | ✅ Decisive win (9-lens) |
+| **A — Light-touch** | Parameterize 4 env vars (SERVICE_NAME, MODULE_PATH, DEPLOY_PORT, HEALTHZ_PATH) + 1 optional (PROD_HOSTNAME). Sister to PR-T9 ADR-0100. | ✅ Decisive win (9-lens) |
 | B — Medium | Same as A + rename `deploy-runner.sh` → `.sh.tmpl` + add template-flavored header section | ❌ Adds reviewer load without addressing critical gaps |
 | C — Heavy | Fork into template-only ADR + minimal 50-line orchestrator that delegates to user scripts | ❌ Fails lens (d) silent-skip on missing DEPLOY_PREFLIGHT_SCRIPT + lens (g) arbitrary-code risk via user-provided preflight |
 
@@ -42,7 +42,7 @@ parameterizes PROD_HOSTNAME rather than dropping it; (b) runtime preconditions �
 
 This ADR formalizes the pattern as it lands in the template repo. AtilCalculator
 ADRs 0027 + 0030 are NOT superseded (they ARE the working instance). Sister-ADR
-pattern: template ADR-0047 = abstract/parameterized pattern; AtilCalculator
+pattern: template ADR-0101 = abstract/parameterized pattern; AtilCalculator
 ADR-0027 + ADR-0030 = concrete working instance.
 
 ## Decision
@@ -154,7 +154,7 @@ Three alternatives considered:
 |---|---|---|
 | **(a)** Adopt the AtilCalculator deploy-runner.sh verbatim (562 LOC, AtilCalc-specific) | Zero abstraction work | ❌ Rejected — template users would need to grep-and-replace 5+ AtilCalc-specific strings; error-prone |
 | **(b)** Fork into template-only ADR + 50-line orchestrator that delegates to user scripts | Maximum flexibility | ❌ Rejected per Issue #375 verdict — fails lens (d) silent-skip on missing DEPLOY_PREFLIGHT_SCRIPT, plus lens (g) arbitrary-code risk |
-| **(c)** (chosen) Parameterize 4 env vars + 1 optional + nohup+setsid restart + sister-ADR pattern | Boring-tech-wins, sister to PR-T9 ADR-0046 | ✅ Adopted — 200 LOC (vs 562), env-driven, single-source-of-truth env-var table |
+| **(c)** (chosen) Parameterize 4 env vars + 1 optional + nohup+setsid restart + sister-ADR pattern | Boring-tech-wins, sister to PR-T9 ADR-0100 | ✅ Adopted — 200 LOC (vs 562), env-driven, single-source-of-truth env-var table |
 
 The "boring tech wins" heuristic applies (per ADR-0017 §3): 4 env vars + 1
 optional + a generic restart pattern is the entire abstraction. No new tooling,
@@ -166,10 +166,10 @@ pattern, not from AtilCalc's 562-LOC instance).
 ### Positive
 
 - **Template-portable**: 4 env vars cover 99% of self-hosted single-VM deploy use cases.
-- **Sister-ADR pattern**: AtilCalculator ADR-0027 + ADR-0030 stay (working instance); template ADR-0047 is the abstract pattern. Bidirectional cross-link via §Related.
+- **Sister-ADR pattern**: AtilCalculator ADR-0027 + ADR-0030 stay (working instance); template ADR-0101 is the abstract pattern. Bidirectional cross-link via §Related.
 - **Boring tech**: nohup+setsid works on any host with bash + uvicorn. No systemd dependency.
 - **Defensive hardening**: RCA-12 cross-user port checks preserved (lens d fail-loud + lens g security).
-- **Test coverage**: d046 (env validation, 9 TCs) + d047 (smoke test, 7 TCs) per ADR-0046 d-test convention. Total 16 TCs verify the pattern contract.
+- **Test coverage**: d046 (env validation, 9 TCs) + d047 (smoke test, 7 TCs) per ADR-0100 d-test convention. Total 16 TCs verify the pattern contract.
 - **Production-tested sister**: the abstract pattern is derived from AtilCalculator's RCA-hardened v9.1 implementation (562 LOC). Template users inherit the same hardening without re-deriving it.
 
 ### Negative
@@ -188,15 +188,15 @@ pattern, not from AtilCalc's 562-LOC instance).
 
 ### Follow-up tickets
 
-1. `@developer`: when implementing a new project's deploy, follow this ADR's env-var table. Reference ADR-0047 in the PR body that renames `.github/workflows/deploy.yml.tmpl` → `deploy.yml`.
-2. `@architect`: keep template ADR-0047 in sync with AtilCalculator ADR-0027 + ADR-0030 amendments (bidirectional sister-ADR pattern). Quarterly cross-repo audit.
+1. `@developer`: when implementing a new project's deploy, follow this ADR's env-var table. Reference ADR-0101 in the PR body that renames `.github/workflows/deploy.yml.tmpl` → `deploy.yml`.
+2. `@architect`: keep template ADR-0101 in sync with AtilCalculator ADR-0027 + ADR-0030 amendments (bidirectional sister-ADR pattern). Quarterly cross-repo audit.
 3. `@tester`: when reviewing a project's deploy PR, verify: (a) 4 env vars set in repo Variables, (b) `HEALTHZ_PATH` returns JSON with `git_sha` field, (c) d046 + d047 pass against the project-specific `scripts/deploy-runner.sh` (or equivalent), (d) PROD_HOSTNAME set if multi-host.
 4. `@human`: review + approve the `.github/workflows/deploy.yml` rename PR (workflow file = human-only per file ownership matrix).
 
 ## Future work
 
 - **Domain subdir grouping** for project-specific deploy scripts (`scripts/deploy/project-foo.sh`, `scripts/deploy/project-bar.sh`) — defer until 5+ projects use the pattern.
-- **Sister-test diff helper** (`scripts/diff-sister-adr.sh ADR-0047 ADR-0027`) to surface behavioral drift between template and AtilCalculator deploy patterns.
+- **Sister-test diff helper** (`scripts/diff-sister-adr.sh ADR-0101 ADR-0027`) to surface behavioral drift between template and AtilCalculator deploy patterns.
 - **Cross-repo workflow sync** (per ADR-0040): if AtilCalculator changes `deploy.yml`, auto-port to template `deploy.yml.tmpl` via cross-repo-close pattern.
 - **d048-deploy-runner-rollback.sh** — dedicated regression for the rollback + retry-smoke-test path (currently covered by d047 T5 + smoke).
 
@@ -206,7 +206,7 @@ pattern, not from AtilCalc's 562-LOC instance).
 
 - **AtilCalculator ADR-0027** — concrete working instance of this pattern (auto-deploy on push to main). AtilCalculator `scripts/deploy-runner.sh` v9.1 (562 LOC) implements the pattern with AtilCalc-specific service name + module path + port + healthz path + RCA-7/9/11/12/14 hardening refs.
 - **AtilCalculator ADR-0030** — concrete self-hosted runner pattern (supersedes AtilCalculator ADR-0027 §Decision.1 for the LAN-deploy case). Sister to this ADR's nohup+setsid restart decision.
-- **Template ADR-0046** — d-test convention (sister to this ADR; both follow the same env-driven, testable, sister-ADR pattern).
+- **Template ADR-0100** — d-test convention (sister to this ADR; both follow the same env-driven, testable, sister-ADR pattern).
 
 **Trigger:** Issue #198 (Sprint 2+3 template port candidates, 2026-06-23T12:16:16Z auto-claim) — PR-T8 + PR-T10 coupling (impl + ADR generalization) chosen as highest-value deploy-related port because the pattern is production-tested in AtilCalculator v9.1 but no template-port version existed.
 

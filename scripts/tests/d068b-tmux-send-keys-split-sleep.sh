@@ -2,7 +2,7 @@
 # d068b-tmux-send-keys-split-sleep.sh — regression test for Issue #935 (TD-068b)
 #
 # Sister test: atilcan65/AtilCalculator scripts/tests/d068b-tmux-send-keys-split-sleep.sh
-#   (canonical authored in AtilCalculator per ADR-0046 rule #4; this template
+#   (canonical authored in AtilCalculator per ADR-0100 rule #4; this template
 #    port mirrors the same 5-site env-override contract to dev-studio-template
 #    so downstream projects inherit the fix at template-bootstrap.)
 #

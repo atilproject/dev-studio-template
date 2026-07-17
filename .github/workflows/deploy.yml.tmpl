@@ -1,5 +1,5 @@
 # .github/workflows/deploy.yml.tmpl
-# TEMPLATE PORT (Issue #375 Option A, ADR-0047) — generic deploy automation pattern.
+# TEMPLATE PORT (Issue #375 Option A, ADR-0101) — generic deploy automation pattern.
 #
 # Why this workflow exists
 # ------------------------
@@ -30,7 +30,7 @@
 #   - AtilCalculator RCA-7/9/11/12/14 hardening (FAIL-or-CREATE preflight,
 #     cross-user port check, post-restart etimes check, idempotent converge)
 #
-# See ADR-0047 in docs/decisions/ for the full pattern spec + env-var table.
+# See ADR-0101 in docs/decisions/ for the full pattern spec + env-var table.
 
 name: Deploy to production
 
@@ -56,7 +56,7 @@ jobs:
     timeout-minutes: 5  # bounded; longer = hung runner / script, abort + investigate
 
     env:
-      # 4 required env vars (per ADR-0047 §Decision.1 env-var table)
+      # 4 required env vars (per ADR-0101 §Decision.1 env-var table)
       SERVICE_NAME: ${{ vars.SERVICE_NAME }}
       MODULE_PATH: ${{ vars.MODULE_PATH }}
       DEPLOY_PORT: ${{ vars.DEPLOY_PORT }}
@@ -74,7 +74,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 2. Deploy + smoke test + auto-rollback (ADR-0047 §Decision.4).
+      # 2. Deploy + smoke test + auto-rollback (ADR-0101 §Decision.4).
       #    Idempotent converge + restart + smoke + rollback (ADR-0027 §3+5
       #    pattern preserved). nohup+setsid restart (no systemd dependency).
       #
