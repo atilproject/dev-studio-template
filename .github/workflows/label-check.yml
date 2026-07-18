@@ -28,7 +28,10 @@ jobs:
     runs-on: [self-hosted, Linux, X64, atilproject]
     steps:
       - name: Verify required label categories
-        uses: actions/github-script@v7
+        # SHA-pinned per ADR-0027 §Threat model + ADR-0043 §lens (h).
+        # Sister-pattern: atilcan65/AtilCalculator label-check.yml:54,178,243
+        # (all using the same v7 SHA for defense in depth).
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
         env:
           MARKER: "<!-- adr-0012-label-check -->"
         with:
