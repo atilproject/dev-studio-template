@@ -272,10 +272,26 @@ section "TC4: auto-claim.log line format assertion (Issue #144 AC4 verbatim)"
 # Always GREEN today (format string is pure literal pin-able via grep).
 # Forward-looking: when dispatch impl writes to auto-claim.log, it MUST
 # emit the format literal-spec — this TC guards against silent format drift.
+#
+# Sister-issuance paths (NIT #2 cleanup per Issue #146 AC2):
+# - ADR-0066 (Fix 4b tmux-wake lenient-verify, hierarchical exit code):
+#   dispatch impl sister-pattern — auto-claim.log entries trigger Fix 4b
+#   dispatch when cadence-rule-2 literal is detected
+# - RETRO-027 (Cadence Rule 2 retroactive-close precondition):
+#   sister-issuance contract — auto-claim.log is the canonical dispatch
+#   evidence channel for retroactive-close audit trail
+# Note: this TC pins the SPEC format (not the emission source) — emission
+# source is the production dispatch impl (separate sister-pattern d1138
+# dispatch impl on dev lane). Spec pinning is doctrinally correct per
+# Issue #414 §1 (verification surface != emission surface).
 
 EXPECTED_FORMAT_LITERAL='[cadence-rule-2]'
-if grep -qF "$EXPECTED_FORMAT_LITERAL" "$D_TEST_FILE" || \
-   grep -qF "$EXPECTED_FORMAT_LITERAL" /etc/hostname 2>/dev/null; then
+# NIT #1 cleanup (Issue #146 AC1): removed /etc/hostname fallback grep —
+# purposeless on Linux (hostname doesn't contain '[cadence-rule-2]' literal).
+# Spec capture is solely via $D_TEST_FILE docstring pin. Sister-pattern to
+# d1138 fix-pattern cycle; hostname grep was a leftover from earlier fallback
+# design that never matched in practice. See Issue #146 NIT #1 + AC1.
+if grep -qF "$EXPECTED_FORMAT_LITERAL" "$D_TEST_FILE"; then
   # The literal exists in this d-test file (per the docstring header) — that's
   # the format spec, not actual log emission. Forward-looking test: when impl
   # runs, it must emit this format. Test passes today because spec is pinned.
