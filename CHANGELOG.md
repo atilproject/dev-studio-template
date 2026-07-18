@@ -145,6 +145,39 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   subprocess-level regression pin and PR #25 / `tests/test_sigterm_handler.py`
   for the in-process pin.
 
+### Fixed
+
+- **#130 (S32-002.1) — `scripts/verify-portage.sh` diff engine wiring closes
+  the silent-green AC4 placeholder gap (Issue #1041 sister-pattern, Sprint 32
+  Wave 2 candidate).** Sister-PR baseline report `docs/sprints/sprint-32/02-portage-baseline.md`
+  (calc mirror: `tmpl-s32-002/docs/sprints/sprint-32/02-portage-baseline.md`)
+  documented S32-002 (PR #129) AC4 as FAIL-by-design: step 3+4 emitted
+  `category_gaps: 0/0/0/0` for all 4 categories — exact Issue #1041 sister-pattern
+  (silent-green false-confidence). This PR replaces the placeholder with a real
+  diff engine (python3 heredoc, file METADATA only: sha256 truncated to 12 chars
+  + size — no file contents in output = secret-safe by construction), adds
+  `--reference-repo <owner/repo>` + `--ref-dir <path>` flags (shift-based arg
+  parser replaces the broken positional loop that left `--report /tmp/foo`
+  unparseable), expands the exit-code matrix from 6 → 9 (new: 7=ref-clone-fail,
+  8=ref-dir-invalid), adds d-test parity (local `scripts/tests/` count vs ref
+  count, delta = "missing d-tests in ref"), and adds defensive sanitization
+  (regex redaction of `ghp_*` / `gho_*` / `ghs_*` / `ghr_*` / `github_pat_*` /
+  `TELEGRAM_BOT_TOKEN=` tokens — defense-in-depth, vacuous against metadata-only
+  output). Pre-impl RED state verified 5/10 PASS / 5/10 FAIL (TC4 --ref-dir,
+  TC5 JSON schema, TC6 per-file diff, TC7 dtest_parity, TC9 --reference-repo
+  all FAIL); post-impl GREEN state verified 10/10 PASS on this branch
+  (`scripts/tests/d-verify-portage-diff-engine.sh`). Sister-PR cluster per
+  ADR-0059: S32-002 (PR #129, MERGED 5cf72a7, AC4 FAIL-by-design) + S32-002.1
+  (this PR, AC4 gap-closure). PR body anchors `Refs atilproject/dev-studio-template#130`
+  + `Refs atilproject/dev-studio-template#128` + `Refs atilproject/dev-studio-template#129`
+  + `Refs atilcan65/AtilCalculator#1149` (Refs-only per ADR-0057 strict format —
+  Issue #130 in-progress WIP=1/1, sister-pattern PR #1151/Issue #1150 cycle ~#3177).
+  Regression pin: `scripts/tests/d-verify-portage-diff-engine.sh` (10 TCs RED-first
+  per ADR-0044 ≥5 baseline). Forward-path: future clones from template will
+  inherit real diff engine + sanitization + d-test parity on first `init`,
+  restoring the cross-repo gap-claim (Sprint 28 §4.6) re-verifiability that
+  Sprint 29 STORY-S29-005 (PR #125 → 52ed840) originally established.
+
 ### Changed
 
 - **PR #35 — DEV-IDLE-K3 Katman 3: Doctrine Reminder in 5 soul templates**
