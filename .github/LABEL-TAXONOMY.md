@@ -1,7 +1,7 @@
 # Label Taxonomy — dev-studio-template
 
-> Mirror of [AtilCalculator's `.github/LABEL-TAXONOMY.md`](https://github.com/atilcan65/AtilCalculator/blob/main/.github/LABEL-TAXONOMY.md) (Issue #264, GAP KAPATMA port, P2).
-> Canonical source: `atilcan65/AtilCalculator` (`scripts/bootstrap-labels.sh`).
+> Mirror of [AtilCalculator's `.github/LABEL-TAXONOMY.md`](https://github.com/atilproject/AtilCalculator/blob/main/.github/LABEL-TAXONOMY.md) (Issue #264, GAP KAPATMA port, P2).
+> Canonical source: `atilproject/AtilCalculator` (`scripts/bootstrap-labels.sh`).
 
 This document describes the label set every project bootstrapped from
 `dev-studio-template` MUST have, plus the rationale and the 4-category invariant

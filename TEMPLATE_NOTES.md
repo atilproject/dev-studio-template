@@ -35,7 +35,7 @@ alone is enough.
 **When NOT to use `-w`**: peer agent is silent / not running, or this is
 a broadcast ping. GitHub artefact (label / comment) is enough.
 
-**Reference impl**: `atilcan65/AtilCalculator` commit `ecbf21a` (PR #239).
+**Reference impl**: `atilproject/AtilCalculator` commit `ecbf21a` (PR #239).
 
 ## Sprint 4 P0: No-standby doctrine (Issue #238 → template Issue #40)
 
@@ -50,7 +50,7 @@ human").
 + 3-question self-check + per-role callout. Adds `d028-no-standby`
 regression test (4 TCs, one per forbidden mode).
 
-**Reference impl**: `atilcan65/AtilCalculator` Issue #238, PR #245.
+**Reference impl**: `atilproject/AtilCalculator` Issue #238, PR #245.
 
 ## Sprint 4 P0: Wake-nudge text must not say "standby" (Issue #256 → template Issue #41)
 
@@ -63,7 +63,7 @@ mode, directly contradicting the no-standby doctrine.
 heartbeat + return to queue). Locked in by d015 + d028 regression
 suite.
 
-**Reference impl**: `atilcan65/AtilCalculator` Issue #256, PR #257.
+**Reference impl**: `atilproject/AtilCalculator` Issue #256, PR #257.
 
 ## Sprint 4 P2: Proactive board scan (Issue #44 → template Issue #TBD)
 
@@ -75,4 +75,4 @@ deadline.
 scans its own lane for items in `status:ready` past a freshness
 threshold. Adds `d094-ext` regression test (6 TCs).
 
-**Reference impl**: `atilcan65/AtilCalculator` Issue #44, PR #219.
+**Reference impl**: `atilproject/AtilCalculator` Issue #44, PR #219.
