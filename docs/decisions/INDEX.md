@@ -6,6 +6,8 @@ one in its `Supersedes` field.
 
 | ID | Title | Status | Date | Deciders | Related |
 |----|-------|--------|------|----------|---------|
+| [ADR-0001](./ADR-0001-template-architecture.md) | Template Architecture — Single-Repo, Placeholder Parameterization, gh-Distribution | Proposed | 2026-06-29 | @architect + @pm + @dev + @tester + @owner | Closes Issue #627, STORY-S21-016; sister-patterns: ADR-0012, ADR-0014, ADR-0016, ADR-0045, ADR-0049, ADR-0055, RETRO-014 §6 |
+| [ADR-0002](./ADR-0002-autonomy-loop.md) | Autonomy Loop (GitHub-native wake-up) | Accepted | 2026-06-21 | Architect | Sister-pattern to AtilCalculator ADR-0002; foundational for ADR-0010, ADR-0012, ADR-0013, ADR-0015, ADR-0024, ADR-0026, ADR-0038 |
 | [ADR-0010](./ADR-0010-per-project-watchers.md) | Per-Project Systemd Watchers | Accepted | 2026-06-14 | Architect | Supersedes ADR-0006 (instance topology); related to ADR-0002, ADR-0003 |
 | [ADR-0011](./ADR-0011-watcher-dropin-override.md) | Watcher Per-Instance Config via Drop-In Override | Accepted | 2026-06-14 | Architect | Refines ADR-0010 (implementation detail of per-instance config) |
 | [ADR-0012](./ADR-0012-required-label-set.md) | Required Label Set on Issue/PR Creation | Accepted | 2026-06-14 | Architect | Related to ADR-0002, ADR-0007, ADR-0009; sister of ADR-0013 |
@@ -13,15 +15,36 @@ one in its `Supersedes` field.
 | [ADR-0014](./ADR-0014-project-token-secret.md) | PROJECT_TOKEN repo secret for board sync workflow | Accepted | 2026-06-14 | Architect | Supersedes ADR-0013 auth section; related to ADR-0013 |
 | [ADR-0015](./ADR-0015-atomic-agent-handoff.md) | Atomic Agent Hand-off (preserve 4-cat invariant) | Accepted | 2026-06-14 | Architect | Refines ADR-0009 cc-flip; ensures ADR-0012 invariant during agent transitions |
 | [ADR-0016](./ADR-0016-public-by-default.md) | Public-by-default for bootstrapped projects | Accepted | 2026-06-17 | Architect | Related to ADR-0014 (PROJECT_TOKEN canary quota interaction) |
-| [ADR-0002](./ADR-0002-autonomy-loop.md) | Autonomy Loop (GitHub-native wake-up) | Accepted | 2026-06-21 | Architect | Sister-pattern to AtilCalculator ADR-0002; foundational for ADR-0010, ADR-0012, ADR-0013, ADR-0015, ADR-0024, ADR-0026, ADR-0038 |
-| [ADR-0038](./ADR-0038-auto-claim-protocol.md) | Auto-Claim Protocol — agents self-claim highest-priority ready item when WIP < 2 | Accepted | 2026-06-22 | Architect | Sister-pattern to AtilCalculator ADR-0038; refines ADR-0002 (claim-driven extension); related to ADR-0012, ADR-0031, ADR-0036, Issue #222 |
+| [ADR-0017](./ADR-0017-tech-stack.md) | Tech stack for AtilCalculator | Accepted (amended 2026-06-24) | 2026-06-17 | @architect + @pm + @dev + @tester + @owner | Related: ADR-0010, ADR-0012, ADR-0014, ADR-0016; supersedes none |
+| [ADR-0020](./ADR-0020-label-mutation-transactionality.md) | Label Mutation Transactionality (atomic 4-flag flip pattern) | Proposed | 2026-06-18 | Architect | Sister-pattern to ADR-0015 |
+| [ADR-0021](./ADR-0021-docs-pr-convention.md) | Docs PR Convention (sprint ceremony + ADR docs) | Proposed | 2026-06-19 | Architect | Sister-pattern to ADR-0012 |
 | [ADR-0024](./ADR-0024-stale-verdict-watchdog-schema.md) | Stale-Verdict Watchdog Schema (`verdict-by:<ts>` labels + `stale_verdict` events) | Proposed | 2026-06-19 | Architect | Related to ADR-0002, ADR-0009, ADR-0012, ADR-0015, ADR-0020, ADR-0021 |
 | [ADR-0025](./ADR-0025-bound-standby-exception.md) | Bound Standby Exception (a) + Queue-Empty Wake | **Superseded in template** (by §Doctrine Reminder — Issue #238 / PR #40 / PR #41) | 2026-06-19 | Architect | Kept for historical traceability; canonical enforcement is the soul template §Doctrine Reminder section |
 | [ADR-0026](./ADR-0026-queue-empty-mention-check.md) | Queue-Empty Wake: @mention Check (Amendment to ADR-0025 §2) | Proposed | 2026-06-19 | Architect | Amends ADR-0025 §2; related to ADR-0002, ADR-0021, ADR-0025 |
 | [ADR-0027](./ADR-0027-deploy-automation.md) | Automatic Deploy Pipeline (GH Action on main merge → SSH pull+restart) | Proposed | 2026-06-19 | Architect | Related to ADR-0010, ADR-0014, ADR-0017, ADR-0022; ADR-0030 supersedes §Decision.1 (LAN-deploy case only) |
 | [ADR-0030](./ADR-0030-self-hosted-runner-lan-deploy.md) | Self-Hosted GitHub Runner for Private LAN Deploy | Proposed | 2026-06-19 | Architect | Supersedes ADR-0027 §Decision.1 (LAN-deploy case only); related to ADR-0027, ADR-0010, Issue #138 |
+| [ADR-0031](./ADR-0031-owner-override-doctrine.md) | Owner Override Doctrine (soul-level decision authority) | Accepted | 2026-06-19 | Architect + Owner | Sister-pattern to ADR-0012 + ADR-0015 |
+| [ADR-0032](./ADR-0032-rca-18-dedup-buffer-pollution.md) | RCA-18 Dedup Buffer Pollution (peer-poke silent-skip sister-pattern) | Proposed | 2026-06-20 | Architect | Sister-pattern to ADR-0033 |
+| [ADR-0033](./ADR-0033-auto-ping-dual-channel.md) | Auto-Ping Dual-Channel Doctrine (Telegram + tmux pane wake) | Accepted | 2026-06-20 | Architect | Sister-pattern to ADR-0002 (autonomy loop); refines notify.sh |
+| [ADR-0034](./ADR-0034-agent-state-cmd-set-argjson.md) | agent-state.sh cmd_set JSON contract fix (Issue #228 RCA + design) | Proposed | 2026-06-21 | @architect | Related: ADR-0002, ADR-0024, ADR-0025, Issue #228, Issue #94 |
+| [ADR-0035](./ADR-0035-layer3-open-only-fire.md) | Layer 3 CI gate: open-only fire (Issue #227 re-fire gap fix) | Proposed | 2026-06-21 | @architect | Related: ADR-0012, Issue #213, Issue #227, PR #220, ADR-0031 |
+| [ADR-0036](./ADR-0036-status-transition-wake.md) | Status Transition Wake (ADR-0038 §Layer 2 sister-pattern) | Accepted | 2026-06-21 | Architect | Sister-pattern to ADR-0038 |
+| [ADR-0037](./ADR-0037-proactive-gap-scan.md) | Orchestrator Proactive Gap-Scan (extend `proactive-board-scan.sh` with D5–D8) | Proposed | 2026-06-22 | @architect + @dev + @tester + @orchestrator + @owner | Related: Issue #235, Issue #221, Issue #232, Issue #238, `scripts/proactive-board-scan.sh` |
+| [ADR-0038](./ADR-0038-auto-claim-protocol.md) | Auto-Claim Protocol — agents self-claim highest-priority ready item when WIP < 2 | Accepted | 2026-06-22 | Architect | Sister-pattern to AtilCalculator ADR-0038; refines ADR-0002 (claim-driven extension); related to ADR-0012, ADR-0031, ADR-0036, Issue #222 |
+| [ADR-0039](./ADR-0039-wip-idle-watchdog.md) | WIP-idle watchdog — 30-minute idle threshold for `WIP > 0` agents | Proposed | 2026-06-23 | @architect + @orchestrator + @owner + @developer + @tester | Related: Issue #289, Sprint 6 #291, d034 |
+| [ADR-0040](./ADR-0040-cross-repo-pr-auto-close.md) | Cross-Repo PR Auto-Close (RETRO-024 sister-pattern) | Proposed | 2026-06-23 | Architect | Sister-pattern to ADR-0057 |
+| [ADR-0042](./ADR-0042-orchestrator-role.md) | Orchestrator Role Definition | Accepted | 2026-06-24 | Architect | Sister-pattern to ADR-0038 + ADR-0044 |
+| [ADR-0044](./ADR-0044-verdict-by-scope-clarification.md) | Verdict-By:* SLA Scope Clarification (TDD RED exclusion) | Proposed | 2026-06-24 | @architect | Related: ADR-0024, ADR-0041, ADR-0042, TD-006, Issue #319, Issue #313, Issue #317, PR #313 |
+| [ADR-0045](./ADR-0045-auto-generated-file-refs-design-verification.md) | Auto-Generated File Refs in Design Verification (lens (j)) | Proposed | 2026-06-24 | @architect + @pm + @dev + @tester + @owner | Closes TD-030; related: ADR-0043, ADR-0044, Issue #363 |
 | [ADR-0046](./ADR-0046-d-test-convention.md) | d-numbered regression test convention (`scripts/tests/dNNN-*.sh`) | Proposed | 2026-06-23 | Architect | Codifies existing pattern (AtilCalculator d006–d033); related to ADR-0002, ADR-0025, ADR-0026, Issue #198 |
 | [ADR-0047](./ADR-0047-deploy-automation-pattern.md) | Deploy automation pattern (env-driven `scripts/deploy-runner.sh` + `deploy.yml.tmpl`) | Proposed | 2026-06-25 | Architect | Sister to AtilCalculator ADR-0027 + ADR-0030; related to ADR-0046, Issue #198, Issue #375 |
+| [ADR-0048](./ADR-0048-status-ready-auto-add-gating.md) | Status-ready auto-add gating (Layer 5 CI completion → status:ready flip) | Accepted | 2026-06-25 | Architect | Sister-pattern to ADR-0036 |
+| [ADR-0049](./ADR-0049-behavioral-workflow-test-framework.md) | Behavioral Workflow Test Framework (`scripts/tests/dNNN-*.sh`) | Accepted | 2026-06-25 | Architect | Sister-pattern to ADR-0050, ADR-0055; related to ADR-0044, ADR-0046 |
+| [ADR-0050](./ADR-0050-pre-merge-4-cat-verification.md) | Pre-Merge 4-cat Verification (label-set invariant gate) | Accepted | 2026-06-26 | Architect | Sister-pattern to ADR-0012, ADR-0015 |
+| [ADR-0052](./ADR-0052-ci-rerun-race-codification.md) | CI Re-run Race Codification (RETRO-008 §1) | Accepted | 2026-06-26 | Architect | Sister-pattern to ADR-0053 (Layer 5 race) |
+| [ADR-0053](./ADR-0053-layer-5-race-pattern.md) | Layer 5 race pattern codification | Proposed (Sprint 14 P1 #5) | 2026-06-27 | @architect + @orchestrator + @developer + @tester | Sister to ADR-0052 (CI re-run race); related to ADR-0048 |
+| [ADR-0055](./ADR-0055-d-test-id-uniqueness-sub-pattern-matrix.md) | d-test ID uniqueness invariant + sub-pattern remediation matrix (codifies Issue #551) | Proposed | 2026-06-27 | @architect + @developer + @tester + @pm + @owner | Closes Issue #551; sister-patterns: ADR-0049, ADR-0050, ADR-0053, ADR-0054, RETRO-009 §6, Issue #533 |
+| [ADR-0057](./ADR-0057-closes-anchor-guard.md) | Closes Anchor Guard (PR body `Closes #N` strict format) | Accepted | 2026-06-29 | Architect | Sister-pattern to ADR-0055 §1 |
 | [ADR-0058](./ADR-0058-comment-trigger-guard.md) | [RESERVED — Sprint 28] Comment-trigger guard + multi-fire prevention + stability gate | Proposed (reserved) | 2026-07-10 | Architect | Reserved per audit-baseline §20.1 ADR pre-allocation map; sister-pattern to AtilCalculator ADR-0058 |
 | [ADR-0059](./ADR-0059-cluster-squash-batch-lag.md) | [RESERVED — Sprint 28] Cluster-Squash Batch-Lag Detection Doctrine | Proposed (reserved) | 2026-07-10 | Architect | Reserved per §20.1; sister-pattern to AtilCalculator ADR-0059 |
 | [ADR-0060](./ADR-0060-claude-code-2.1.207-agent-flag.md) | Claude Code 2.1.207 — Remove `--agent` flag from custom agent invocation (single-token heredoc fix) | Proposed | 2026-07-14 | Architect | Closes #88; sister-patterns: ADR-0059, ADR-0024, ADR-0049, ADR-0055 §1, ADR-0031, ADR-0044; supersedes §20.1 reservation (AC Mapping — un-authored on template, RETRO-018 W6 repurposed); AC Mapping doctrine canonical home remains AtilCalculator ADR-0060 |
@@ -46,12 +69,6 @@ one in its `Supersedes` field.
 - **Header**: every ADR starts with `# ADR-NNNN: <title>` followed by a YAML-style frontmatter block (Status, Date, Deciders, Supersedes, Related)
 - **Regression tests**: `scripts/tests/dNNN-<slug>.sh` per [ADR-0046](./ADR-0046-d-test-convention.md) — 3-digit monotonic number, kebab-case slug, self-contained bash, standalone runnable. See `scripts/README.md` §d-test convention for the body skeleton.
 - **Deploy automation**: `scripts/deploy-runner.sh` + `.github/workflows/deploy.yml.tmpl` per [ADR-0047](./ADR-0047-deploy-automation-pattern.md) — 4 required env vars (SERVICE_NAME, MODULE_PATH, DEPLOY_PORT, HEALTHZ_PATH) + 1 optional (PROD_HOSTNAME), nohup+setsid restart, RCA-12 cross-user port checks, smoke test + auto-rollback. See `scripts/README.md` §deploy-runner for the env-var table.
-
-- **Path**: `docs/decisions/ADR-NNNN-<slug>.md`
-- **ID**: monotonically increasing, zero-padded to 4 digits
-- **Slug**: kebab-case, short, filename-safe
-- **Status lifecycle**: Proposed → Accepted → (optionally) Superseded by ADR-MMMM
-- **Header**: every ADR starts with `# ADR-NNNN: <title>` followed by a YAML-style frontmatter block (Status, Date, Deciders, Supersedes, Related)
 
 ## Pending proposals
 
