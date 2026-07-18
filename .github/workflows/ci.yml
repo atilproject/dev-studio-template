@@ -99,7 +99,17 @@ jobs:
       # setup-python action respects .python-version automatically if present).
       - name: Setup Python
         if: steps.detect.outputs.python == 'true'
-        uses: actions/setup-python@v5
+        # SHA-pinned per ADR-0027 §Threat model + ADR-0043 §lens (h).
+        # Sister-pattern: ci.yml lines 24, 68 (actions/checkout v4 + setup-node v4)
+        # + label-check.yml:34 + cross-repo-close.yml:40 + status-label-to-board.yml:64
+        # + ai-pr-review.yml:19 — all using 40-char commit SHAs.
+        # S32-008 scope expansion (arch 9-Lens D8 verdict cycle ~#3356, ORCH
+        # owner-decision cycle ~#3348/3350): actions/setup-python added by S32-009
+        # PR #147 (squashed sha 87486e8) was not SHA-pinned in the original PR #148
+        # scope; closing the gap here. SHA verified via git ls-remote against the
+        # @v5 lightweight tag (NOT arch's originally-cited v5.0.0 point release —
+        # arch correction ACK cycle ~#3357).
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: '3.12'
           cache: 'pip'
