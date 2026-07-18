@@ -104,3 +104,92 @@ by `peer-poke.sh` — single-role only. Defer to Sprint 8+ P3 (multi-role helper
 Default to `peer-poke.sh` for all 1:1 peer handoffs. Multi-role broadcasts remain manual (loop over roles) until §Peer-Poke Discipline v2 adds broadcast helper.
 
 # <<< Issue #389 SOUL AMEND END
+
+# >>> KAPI HOTFIX SOUL AMEND BEGIN (cycle ~#2776, owner directive 2026-07-17 ~08:34Z)
+
+## §Cadence Rule 2 — ADR Merge → Sister-Issue Dispatch Atomicity
+
+Codifies the orphan-impl cadence gap surfaced by AtilCalculator's ADR-0060
+forward-port never landing (template PR #97 + #108 + #110 merged 2026-07-14/15;
+AtilCalculator sister work never opened). Owner manual fix applied 3 times to
+`scripts/dev-studio-start.sh:149` before persistence requested.
+
+**Rule**: When ANY `docs/decisions/ADR-NNNN-*.md` PR merges to `main` (or
+sister-pattern RETRO/Issue body lists tracked sister issues), the SAME TURN
+MUST also `@`-mention-dispatch each listed sister issue to its `agent:*`
+owner — OR the turn is recorded as **INCOMPLETE** in `/var/log/dev-studio/{{PROJECT_NAME}}/auto-claim.log`.
+
+**Atomic sub-steps** (per ADR-0015 4-flag discipline + ADR-0024 verdict-by):
+
+1. **Cross-repo sister detection** — `gh pr view <N> --json body --jq '.body'`
+   must be parsed for `Closes #X` / `Refs #X` anchors referencing issues in
+   the SAME org (`atilproject/*`). Sister issues = those NOT yet closed.
+2. **Per-sister dispatch** — for each unclosed sister issue: `gh issue comment <X> --body "@<agent-role> dispatch: ADR-NNNN merged in <YYYY-MM-DDTHH:MM:SSZ>; your lane is <lane>; Closes #X" --repo <repo>`. Order: tester (d-test) → developer (impl) → orchestrator (board sync).
+3. **State emission** — write `auto-claim.log` line: `[cadence-rule-2] ADR-NNNN merged → dispatched <count> sister issues: #X1, #X2, #X3`. If count == 0, log `[cadence-rule-2] ADR-NNNN merged → no sister issues (INCOMPLETE-check passed but no work to dispatch)`.
+4. **Retrospective lens** — if a `[cadence-rule-2] INCOMPLETE` flag is observed
+   in `auto-claim.log` for the same ADR within 7 days, sprint retro MUST
+   file a RETRO entry capturing the gap.
+
+**Origin**: Sprint 30 KAPI hotfix (cycle ~#2776, owner directive 2026-07-17
+~08:34Z). Sister-pattern: `[[cadence-rule-1]]` (ADR-0055 — `d-number allocation atomic`).
+
+**Domain lens applicability:** primarily (a) data flow + (c) API contract.
+Sister-patterns: TD-016 (silent-skip), TD-030 (auto-gen file refs), RETRO-024
+(work-done-elsewhere exception).
+
+**d-test (Cadence Rule 2 atomic, ADR-0055 §1)**: `scripts/tests/d-cadence-rule-2-orphan-impl-dispatch.sh` ≥5 TCs:
+- TC1: ADR-NNNN merged PR detected within 60s
+- TC2: Sister issues with `Refs #X` anchor in PR body extracted
+- TC3: Each sister issue receives `@<role>` mention comment within same turn
+- TC4: `auto-claim.log` line emitted with correct format
+- TC5: INCOMPLETE flag triggers RETRO entry within 7 days
+
+# <<< KAPI HOTFIX SOUL AMEND END
+
+# >>> Cadence Rule 2 Retroactive-Close Precondition SOUL AMEND BEGIN (2026-07-17, owner directive cycle ~#~12:56Z, RETRO-027)
+
+## §Cadence Rule 2 (continued) — Retroactive-Close Precondition
+
+An **orphan-impl issue** (issue for which the fix already exists in working-tree but no PR has been opened) can be retroactively closed **ONLY IF** BOTH preconditions are verified:
+
+1. **(a) PR-persistence**: the fix is PR-persisted in `origin/main` (NOT just local working-tree).
+   Verification: `git fetch origin main && git show origin/main:<file>` MUST contain the fix.
+2. **(b) Closes anchor**: that PR body contains an ADR-0057 strict `Closes #<N>` anchor referencing the issue.
+
+**Retroactive close WITHOUT an anchor-PR is INVALID**; the issue MUST be reopened.
+
+**Restart-survivability test** (mandatory before retroactive close):
+
+```bash
+git fetch origin main
+git show origin/main:<file> | grep -F '<expected fix line>'
+```
+
+If the grep returns 0 lines → the fix is NOT in main → retroactive close forbidden → reopen + dispatch architect/tester/developer chain.
+
+## §Why this clause
+
+In cycle ~#2776, Cadence Rule 2 amendment was applied (forward-port dispatch on ADR merge) but the symmetric retroactive-close case (close orphan-impl without a PR) was NOT preconditioned. At cycle ~#~12:56 UTC, the gap surfaced as: AtilCalculator #1128 + #1129 were retroactively closed without a PR, only the working-tree had the fix, and the bug came back live after tmux restart (10:32 UTC, all 5 panes `--agent not found`). Owner directive cycle ~#~12:56Z mandated this clause.
+
+## §Sister-pattern
+
+- ADR-0012 (4-cat invariant) — labels hygienic
+- ADR-0057 (Closes anchor) — PR body discipline
+- ADR-0044 (RED-first TDD) — tester-before-dev sequencing
+- RETRO-024 (work-done-elsewhere 4-cat exception) — exception-not-rule sister; RETRO-024 is for cross-repo sister-PR terminal state, this clause is for orphan-impl misuse
+
+## §Operational chain (post-recovery)
+
+1. Owner directive: reopen orphan-impl issue + tag `agent:architect status:in-progress` on sister-implementer issue (re-sequence per cycle ~#~12:56Z case)
+2. Architect opens ADR-0061 docs PR (or next unused slug), `Refs` template ADR + sister template PRs
+3. Architect wakes tester with d-test spec (`Closes #N` for d-test issue)
+4. Tester lands d-test GREEN
+5. Orchestrator wakes developer with impl spec (`Closes #N` for impl issue, `Refs #<d-test-issue>`)
+6. Cluster-squash 3-PR per ADR-0059 (ADR + d-test + impl) in same 60s owner-squash window
+7. Cadence Rule 2 amendment docs PR (this clause, .claude/agents/orchestrator.md) `Closes RETRO-027`
+
+## §Related RETRO
+
+- **RETRO-027** (cycle ~#~12:56 UTC RCA + this clause) — meta-postmortem issue + Cadence Rule 2 retroactive-close precondition
+
+# <<< Cadence Rule 2 Retroactive-Close Precondition SOUL AMEND END

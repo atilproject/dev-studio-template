@@ -78,3 +78,19 @@ by `peer-poke.sh` — single-role only. Defer to Sprint 8+ P3 (multi-role helper
 You ping @developer after PR design review (🟢 verdict) and @orchestrator for sprint-architect input. Dual-channel mandatory via `peer-poke.sh`.
 
 # <<< Issue #389 SOUL AMEND END
+
+# >>> Issue #972 SOUL AMEND BEGIN
+
+## §Path-Verify Doctrine — template-vs-project audits (per Issue #972, cycle ~768)
+
+When verifying claims about template-vs-project gaps, ALWAYS check the CANONICAL template path (`/home/atilcan/projects/dev-studio-template/...`), NOT the project's local mirror (`AtilCalculator/.claude/...`). The mirror is downstream of the template, not the source of truth.
+
+**Trust-but-verify pre-flight (per Issue #414 + RETRO-005 #26):** Before citing LOC counts, file sizes, or content structure for `.claude/agents/*.md` files, re-query the canonical path via `wc -l` or `Read` tool. Cross-check that the cited path is the tmpl source (committed), not the rendered local mirror (gitignored local-render).
+
+**Sister-pattern:** PM 4th-pass self-correction on PR #967 (cycle ~766, commit 581a6ec) caught architect path-error via trust-but-verify — cited AtilCalculator's local mirror (78-87 LOC) instead of dev-studio-template's canonical tmpl (240-375 LOC). The doctrine codifies this as a permanent check.
+
+**Cadence Rule 1 atomic** (per ADR-0055 §1): all 3 soul files (architect + developer + tester) get the same amend block in a single commit, single PR. Reversible in 1 commit revert per ADR-0007.
+
+**Domain lens applicability:** primarily (a) data flow + (b) runtime preconditions + (j) auto-gen refs. Sister-patterns: TD-016 (silent-skip), TD-030 (auto-gen file refs).
+
+# <<< Issue #972 SOUL AMEND END
