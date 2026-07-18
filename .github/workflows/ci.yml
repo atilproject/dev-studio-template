@@ -19,28 +19,53 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Check for package.json
-        id: check-pkg
+      # -------------------------------------------------------------------------
+      # S32-009 — Add Python detection (sister-pattern to AtilCalculator ci.yml
+      # Issue #27 fix, PR #709 / PR #732 cascade). Template previously gated
+      # solely on `package.json`, which silently no-op'd every Python PR.
+      # Detection now emits a flag per language; all subsequent steps gate on
+      # their own flag. AC1 of S32-009.
+      #
+      # Sister-pattern: atilcan65/AtilCalculator .github/workflows/ci.yml
+      # lines 29-41 (Detect project type step). Downstream bootstrap pattern:
+      # adding a Python file + pyproject.toml is sufficient to enable the
+      # Python path with no further config.
+      #
+      # Out of scope for S32-009:
+      #   - mypy --strict step (template has no canonical engine module path
+      #     like calc's src/atilcalc/engine; downstream projects can add it)
+      #   - coverage gate (no canonical engine module = no baseline %)
+      #   - BUDGET_MULTIPLIER / SUBPROCESS_TIMEOUT_S env vars (template has
+      #     no e2e/perf tests that consume them; sister-pattern at calc#727)
+      # -------------------------------------------------------------------------
+      - name: Detect project type
+        id: detect
         run: |
           if [ -f package.json ]; then
-            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "node=true" >> $GITHUB_OUTPUT
           else
-            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "node=false" >> $GITHUB_OUTPUT
+          fi
+          if [ -f pyproject.toml ]; then
+            echo "python=true" >> $GITHUB_OUTPUT
+          else
+            echo "python=false" >> $GITHUB_OUTPUT
           fi
 
+      # --- Node.js path (unchanged from prior to S32-009) ---------------------
       - name: Setup Node.js
-        if: steps.check-pkg.outputs.exists == 'true'
+        if: steps.detect.outputs.node == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
       - name: Install dependencies
-        if: steps.check-pkg.outputs.exists == 'true'
+        if: steps.detect.outputs.node == 'true'
         run: npm ci
 
-      - name: Lint
-        if: steps.check-pkg.outputs.exists == 'true'
+      - name: Lint (Node)
+        if: steps.detect.outputs.node == 'true'
         run: |
           if npm run --silent 2>&1 | grep -q "lint"; then
             npm run lint
@@ -48,8 +73,8 @@ jobs:
             echo "No lint script found — skipping"
           fi
 
-      - name: Test
-        if: steps.check-pkg.outputs.exists == 'true'
+      - name: Test (Node)
+        if: steps.detect.outputs.node == 'true'
         run: |
           if npm run --silent 2>&1 | grep -q "test"; then
             npm test
@@ -57,9 +82,43 @@ jobs:
             echo "No test script found — skipping"
           fi
 
+      # --- Python path (added by S32-009) -------------------------------------
+      # Sister-pattern: AtilCalculator ci.yml lines 73-131 (Python path block).
+      # Template defaults to Python 3.12 to match AtilCalculator + ADR-0017
+      # §CI; downstream projects pin their own via .python-version file (the
+      # setup-python action respects .python-version automatically if present).
+      - name: Setup Python
+        if: steps.detect.outputs.python == 'true'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: 'pip'
+
+      - name: Install Python dependencies
+        if: steps.detect.outputs.python == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          # Editable install with [dev] extra (per pyproject.toml convention).
+          # If pyproject.toml lacks [project.optional-dependencies.dev], pip
+          # install will fail loudly — template leaves this to downstream
+          # conventions rather than guessing.
+          pip install -e ".[dev]"
+
+      - name: Lint (Python)
+        # Skip if no Python source files. ruff exits 0 on an empty tree, but
+        # `pytest` exits non-zero on no tests collected, so we gate the test
+        # step separately on test-file presence.
+        if: steps.detect.outputs.python == 'true' && hashFiles('**/*.py') != ''
+        run: ruff check .
+
+      - name: Test (Python)
+        if: steps.detect.outputs.python == 'true' && hashFiles('tests/**/*.py') != ''
+        run: pytest -q
+
+      # --- No-source sentinel (now correctly gated on BOTH flags being false) -
       - name: No source yet
-        if: steps.check-pkg.outputs.exists == 'false'
-        run: echo "📦 No package.json yet — repo scaffold only. CI will run actual checks once code is added."
+        if: steps.detect.outputs.node == 'false' && steps.detect.outputs.python == 'false'
+        run: echo "📦 No package.json or pyproject.toml yet — repo scaffold only. CI will run actual checks once code is added."
 
   conventional-commits:
     name: Conventional Commits
