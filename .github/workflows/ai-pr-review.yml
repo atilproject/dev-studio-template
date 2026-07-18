@@ -12,7 +12,11 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        # SHA-pinned per ADR-0027 §Threat model + ADR-0043 §lens (h).
+        # Sister-pattern: template ci.yml + label-check.yml + post-squash.yml
+        # + d050b-dispatch.yml + cross-repo-close.yml (same v4 SHA across
+        # all template workflows).
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
         with:
           fetch-depth: 0
 
