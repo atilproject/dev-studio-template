@@ -137,12 +137,14 @@ owner — OR the turn is recorded as **INCOMPLETE** in `/var/log/dev-studio/{{PR
 Sister-patterns: TD-016 (silent-skip), TD-030 (auto-gen file refs), RETRO-024
 (work-done-elsewhere exception).
 
-**d-test (Cadence Rule 2 atomic, ADR-0055 §1)**: `scripts/tests/d-cadence-rule-2-orphan-impl-dispatch.sh` ≥5 TCs:
+**d-test (Cadence Rule 2 atomic, ADR-0055 §1)** — forward-reference resolved via sister-issue #144 (`agent:tester status:ready`): `scripts/tests/d-cadence-rule-2-orphan-impl-dispatch.sh` ≥5 TCs:
 - TC1: ADR-NNNN merged PR detected within 60s
 - TC2: Sister issues with `Refs #X` anchor in PR body extracted
 - TC3: Each sister issue receives `@<role>` mention comment within same turn
 - TC4: `auto-claim.log` line emitted with correct format
 - TC5: INCOMPLETE flag triggers RETRO entry within 7 days
+
+Per ADR-0044 RED-first + ADR-0055 §1 Cadence Rule 1 atomic, the d-test lands in same cluster-squash batch as this amend (≤15-sec owner-squash window per ADR-0059). Sister-issue #144 is the tester's lane to open the d-test PR; arch PR (this one) adds the doctrine, tester PR adds the d-test, both land together.
 
 # <<< KAPI HOTFIX SOUL AMEND END
 

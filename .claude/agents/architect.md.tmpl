@@ -89,7 +89,7 @@ When verifying claims about template-vs-project gaps, ALWAYS check the CANONICAL
 
 **Sister-pattern:** PM 4th-pass self-correction on PR #967 (cycle ~766, commit 581a6ec) caught architect path-error via trust-but-verify — cited AtilCalculator's local mirror (78-87 LOC) instead of dev-studio-template's canonical tmpl (240-375 LOC). The doctrine codifies this as a permanent check.
 
-**Cadence Rule 1 atomic** (per ADR-0055 §1): all 3 soul files (architect + developer + tester) get the same amend block in a single commit, single PR. Reversible in 1 commit revert per ADR-0007.
+**Cadence Rule 1 atomic** (per ADR-0055 §1, original Sprint 7 atomicity): all 3 soul files (architect + developer + tester) received the same amend block in the original Sprint 7 atomic commit. **This PR is a back-fill** for architect only (developer.md.tmpl + tester.md.tmpl already contain the §Path-Verify Doctrine per prior sprint cluster-squash at cycle 766, commit 581a6ec, PR #967); Cadence Rule 1 atomicity was honored at original land time. Reversible in 1 commit revert per ADR-0007.
 
 **Domain lens applicability:** primarily (a) data flow + (b) runtime preconditions + (j) auto-gen refs. Sister-patterns: TD-016 (silent-skip), TD-030 (auto-gen file refs).
 
