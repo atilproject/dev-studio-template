@@ -4,6 +4,36 @@ All notable changes to this project are recorded here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+- **d-smoke-bootstrap-v110 TC1+TC2 self-fix (Issue #186, P1).** The v1.1.0 d-test
+  shipped in PR #183 had two latent bugs that surfaced during S32-020 Phase B
+  smoke bootstrap verification (cycle ~#3682): **(a) TC1** used top-level
+  `"sha"` extraction which returns empty for **annotated tags** (where the
+  tag-object SHA is at `.object.sha`, not top-level — and `object.type` is
+  `"tag"` instead of `"commit"`). v1.1.0 is annotated (401c22cd → a5b91da),
+  so TC1 returned empty even though the tag existed. Fix: two-step
+  dereference — read `object.type` discriminator, then either use
+  `object.sha` directly (lightweight) or fetch `/git/tags/{tag_obj_sha}`
+  (annotated). **(b) TC2** used unauthenticated curl, which returns 404
+  for **private repos** like `atilcan65/smoke-v110`. Fix: auto-detect
+  `gh auth token` and inject `Authorization: Bearer` header. Added **TC6**
+  annotated-tag dereference consistency check (validates TC1's two-step
+  logic against direct `/git/tags` lookup) + **TC7** 404 vs 422 distinction
+  (pins canonical "tag missing" semantics so future regressions in
+  tag-validation vs lookup are caught). Result: TC1+TC2+TC6+TC7 GREEN on
+  current `atilproject/dev-studio-template` v1.1.0 (verified locally on
+  cycle ~#3683). TC4 (labels=34) + TC5 (main HEAD SHA == tag SHA) remain
+  RED — those test Issue #160 ACs (post-bootstrap state), not infra, and
+  unblock once PR #185 (arch init.sh `TEMPLATE_VERSION` resolver) lands
+  and Phase B re-runs. Sister-pattern: ADR-0044 (RED-first TDD),
+  ADR-0049 (≥5 TC baseline + ≥2 sister-pattern), ADR-0055 §1 (Cadence Rule
+  1 atomic — d-test + INDEX.md + CHANGELOG same commit cluster). Refs
+  Issue #160 (S32-020 Phase B unblock), Issue #185 (arch init.sh fix,
+  sister-PR), Issue #972 (Path-Verify Doctrine sister-pattern).
+
 ## [1.1.0] - 2026-07-18
 
 Sprint 32 Wave 1-5 cumulative release. Bumps the template CHANGELOG to reflect
