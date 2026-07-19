@@ -4,6 +4,136 @@ All notable changes to this project are recorded here. The format is based
 on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the project
 adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.1.0] - 2026-07-18
+
+Sprint 32 Wave 1-5 cumulative release. Bumps the template CHANGELOG to reflect
+all merged PRs since v1.0.1 (2026-07-09). Lands in tmpl repo **before** the
+S32-019 #159 tag cut (AC2 BLOCKER). Sister-pattern to launcher S32-016
+CHANGELOG v0.4.0 bump (AC4).
+
+### Added
+
+- **ADR port batch (S32-003 + S32-027).** 20 doctrine-critical ADRs ported
+  calc→tmpl across two cluster-squash rounds. PR #142 (S32-003, Closes #133)
+  + PR #163 (S32-027, Closes #156). Sister-pattern to calc-side ADR port
+  cycles ~#3196 + ~#3247.
+
+- **Soul-file sync (S32-004 + S32-005 + S32-026).** Three rounds of soul
+  template sync against calc's deployed soul files:
+  - S32-004 / S32-005: §Doctrine Reminder — no self-standby (Issue #238 port
+    replacing Issue #119 in 5 soul templates). PR #98 (Issue #1060
+    env-decoupling, supporting the Auto-Ping dual-channel wiring per
+    ADR-0033) + PR #36 (post-merge CHANGELOG entry). Regression pin:
+    `scripts/tests/d028-no-standby.sh` (4 TCs).
+  - S32-026: soul-sync state correction. PR #168 MERGED `d96a2b7` (Closes
+    #155) — confirmed tmpl AHEAD of calc on soul files post-port.
+
+- **Scripts (S32-006 + S32-025).** Wave 4-5 script additions and ports:
+  - S32-006 (Issue #222): Auto-Ping dual-channel wiring per ADR-0033. New
+    `scripts/agent-wake.sh` (~75 lines, role-to-pane index map), `notify.sh`
+    `-w` + `-r <role>` flag additions. Regression pin:
+    `scripts/tests/d024-agent-wake.sh` (7 TCs RED→GREEN).
+  - S32-025 (Issue #154): `scripts/ops/apply-vm-hardening.sh` ported
+    calc→tmpl with d-test. PR #169 MERGED `aad2e57`. Regression pin:
+    `scripts/tests/d-apply-vm-hardening.sh` (17 TCs).
+
+### Changed
+
+- **Workflows SHA-pinned + Python detection (S32-008 + S32-009).** Defense-
+  in-depth workflow hardening per ADR-0027:
+  - PR #148 (S32-008, Closes #138): SHA-pin all template workflows. Every
+    `uses:` ref switched from branch tag to commit SHA. ADR-0027 amendment
+    forbids floating refs in template workflows.
+  - PR #147 (S32-009, Refs #139): `ci.yml` Python detection + lint/test
+    path. ci.yml now detects `pyproject.toml` and runs `ruff check` →
+    `mypy src/atilcalc/engine` → `pytest -q` only when present. Sister-
+    pattern to calc-side CI detection (Issue #1040 cycle ~#3139).
+
+- **Docs (S32-007 + S32-017).** Two docs additions / fixes in Wave 4-5:
+  - S32-007 (Issue #137): stale URL fix — replaced `atilcan65/*` refs with
+    canonical `atilproject/*` form across `docs/` and `README.md`.
+    PR #141 MERGED `45d8edd`. Sister-pattern to calc-side canonical URL
+    cycle ~#3442 + Issue #638 AC3.
+  - S32-017 (Issue #157): `docs/new-project-steps.md` — 154-line, 4-phase
+    on-ramp doc for downstream projects. PR #167 MERGED `e4d222b`.
+    Sister-pattern to launcher README on-ramp section.
+
+### Fixed
+
+- **Repo-hygiene (S32-001 + S32-002 + S32-022).** Repo-level hardening +
+  diff-engine wiring:
+  - S32-001 (Issue #146): TC4 hostname grep + ADR-0066/RETRO-027 doc
+    reference NIT cleanup. PR #149 MERGED `f90e747`.
+  - S32-002.1 (Issue #130, S32-022 sister-pattern): `scripts/verify-portage.sh`
+    diff engine wiring closes Issue #1041 silent-green gap. Real python3
+    heredoc diff (metadata-only output: sha256[:12] + size — secret-safe
+    by construction), `--reference-repo` + `--ref-dir` flags, exit-code
+    matrix 6 → 9 (new: 7=ref-clone-fail, 8=ref-dir-invalid), d-test parity
+    (local vs ref d-test count, delta = "missing d-tests in ref"),
+    defensive sanitization (regex redaction of `ghp_*` / `gho_*` / `ghs_*` /
+    `ghr_*` / `github_pat_*` / `TELEGRAM_BOT_TOKEN=` tokens). Pre-impl RED
+    state 5/10 PASS / 5/10 FAIL; post-impl GREEN 10/10 PASS on
+    `scripts/tests/d-verify-portage-diff-engine.sh`). PR #132 MERGED
+    `0d91ffab` (merge commit); calc-side mirror atilcan65/AtilCalculator#1166
+    (S32-022 verify-portage re-run, MERGED 06:16:49Z, merge_commit `12a32d69`,
+    head `8c7593c`).
+  - S32-021 (Issue #155 sister): Wave 6 d-test sweep report. PR #170
+    MERGED `4f3b74f` — 41 d-tests, 26 GREEN + 7 genuine regressions +
+    3 pre-impl + 4 env-dependent. 13 sister-issues dispatched via Cadence
+    Rule 2 (Sprint 33+ fixes).
+
+- **`notify.sh` env-decoupling port (#91 → Phase B, sister of calc
+  PR #1057 / Issue #1060).** AC1 Option B per Issue #1055. Pre-fix:
+  `notify.sh` exited 1 on Telegram env-missing BEFORE tmux-wake fired,
+  breaking ADR-0033 dual-channel doctrine in CI/dev/recovery envs (Issue
+  #1053 cross-repo sister). Post-fix: env-missing or API-fail logs WARN/ERROR
+  + marks Telegram failed, but tmux-wake fires UNCONDITIONALLY (when `-w`
+  set). Exit-code matrix matches calc's (0/1/2/3). Cycle #1699 Phase B
+  feedback fixes: (a) removed unconditional `source $HOME/.dev-studio-env`
+  (clobbered `env -u TELEGRAM_BOT_TOKEN` test fixtures); (b) revised
+  WAKE_RESULT → WAKE_ATTEMPTED + WAKE_DELIVERED exit semantics so exit=2
+  matches AC1 Option B "Telegram failed + tmux-wake attempted" path.
+  Result: d1026 4/5 GREEN (TC2 wake_probe FAIL — pre-existing fixture gap
+  deferred to follow-up Issue, PR #96 hotfix scope mismatch). Diff:
+  `scripts/notify.sh` +76/-21. Phase A regression pin (RED-first per
+  ADR-0044): `scripts/tests/d1026-s29-template-env-decoupling-port-parity.sh`.
+
+- **Watcher phantom re-delivery of `board-*` events (P1).** Orchestrator's
+  `agent-watch.sh` loop was re-delivering `board-50-*` and `board-52-*`
+  events across polls, even though both source issues are CLOSED with
+  `status:done` and resolving PRs (#51, #54) are merged. Two interacting
+  bugs: **(A)** three HWM vars (`LAST_SEEN`, `PR_MERGED_LAST_SEEN`,
+  `PR_LABELED_LAST_SEEN`) read ONCE at script start and never refreshed
+  inside `poll_once`, so long-running `--loop` watchers' local vars drifted
+  behind state file's HWM; **(B)** `processed_event_ids` FIFO trim (default
+  50) evicted still-active phantom IDs as newer events flooded in. Fix
+  (commit `1a29310`, originally delivered as PR #62 against the predecessor
+  Issue that was later repurposed — current Issue #61 in tmpl is
+  `feat(scripts): STORY-198 PR-T8+PR-T10 deploy-runner + ADR-0047`, NOT this
+  phantom-dedup bug) moves all three HWM reads into `poll_once` (via
+  `init_pr_merged_hwm` and `init_pr_labeled_hwm` helpers) + bumps
+  `DEFAULT_TRIM_MAX` from 50 to 200 as a backstop. Orchestrator's INBOX
+  clean across 10+ consecutive polls post-fix. **Note: no regression d-test
+  was authored for this fix at the time**; manual verification only.
+  Sprint 33+ follow-up: add `scripts/tests/d213-phantom-board-dedup.sh`
+  per ADR-0044 ≥5 TCs baseline.
+
+### Tests
+
+- **d-test sweep (S32-021 / Wave 6).** PR #170 delivers 41 d-tests across
+  the repo. 26 GREEN at merge time; 7 genuine regressions (sister-issues
+  dispatched via Cadence Rule 2); 3 pre-impl by-design; 4 env-dependent.
+  AC4 NOT MET (d-pr-1147 missing on tmpl per cycle ~#3471 lesson); Sprint
+  33+ follow-up.
+
+### Sister-pattern
+
+- **launcher S32-016 CHANGELOG v0.4.0 bump.** Same sprint cycle Wave 5
+  docs + tag BLOCKER. Both repos' CHANGELOG bumps land before v1.1.0 /
+  v0.4.0 tag cuts (AC4).
+- **Tag BLOCKER for S32-019 #159.** This PR must merge before tag cut
+  per AC2.
+
 ## [1.0.1] - 2026-07-09
 
 ### Fixed
