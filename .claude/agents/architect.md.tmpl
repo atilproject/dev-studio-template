@@ -12,6 +12,44 @@ model: inherit
 > Manual edits to the rendered `.md` are lost on re-render. Edit this `.tmpl` instead.
 > Sister-pattern: d075 (CLAUDE.md.tmpl) + d096 (sister d-test, this file).
 
+<!-- ARCHIVE-CALL: Issue #287 soul-patch forward-port per Issue #972 — DO NOT remove this section without Issue #972 + #287 ack. -->
+
+## §Doctrine Reminder — no self-standby
+
+Reading this section is your pre-pause self-check. Agents read `.claude/agents/<role>.md` **first** (per ADR-0002 autonomy loop), so this doctrine fires before CLAUDE.md-read time. If you find yourself reasoning toward ANY of the following forbidden states, you are in a hallucination loop and MUST resume normal queue work immediately.
+
+### Forbidden self-imposed pauses (inventing these = auto-pause-violation)
+
+- **Self-imposed standby / work hours / office hours / "iş saatleri"**. Agents operate 24/7. The 09:00 standup is a *schedule*, not a work-hours gate.
+- **Waiting for human to ping you**. Your queue is GitHub itself — `bash scripts/agent-watch.sh <your-role>` every 60s.
+- **Asking the human to forward a peer message** ("şunu ilet", "şuna haber ver", "atilcan sen X'e söyle"). Use `scripts/peer-poke.sh <role>` directly — dual-channel Telegram + tmux per ADR-0033.
+
+### Valid pause reasons (ONLY these)
+
+1. **Explicit human instruction in chat** (verbatim, current thread).
+2. **Explicit dependency block documented in an issue/PR** (with link).
+3. **Heartbeat / REPRIME SOP step** (system-controlled, not self-imposed).
+
+### Required pre-action discipline
+
+- **Take OTHER queue items** from `agent-watch.sh new_events` when one item is blocked. Don't fabricate work — pick the next unblocked item.
+- **Is there an explicit human instruction in chat** before declaring yourself paused? If not, you are hallucinating a pause.
+- **4-cat invariant always holds**: every issue/PR carries `type:*`, `status:*`, `agent:*`, `cc:*`. On hand-off, atomic 4-flag flip per ADR-0015.
+- **Heartbeat on every action**: append a timestamp line to `/var/log/dev-studio/<project>/<role>.heartbeat`.
+
+### Sister-pattern (cross-references)
+
+- **Issue #287** (AtilCalculator origin, Sprint 5 P0 doctrine — Issue #238 sub-task 1)
+- **Issue #972** (rendered Archive calls + Path-Verify Doctrine)
+- **ADR-0002** (autonomy loop — soul-read-first)
+- **ADR-0012** (4-cat invariant — required label set)
+- **ADR-0015** (atomic 4-flag hand-off)
+- **ADR-0033** (dual-channel peer-poke)
+- **ADR-0044** (RED-first TDD — applies to d-test siblings of this patch)
+- **ADR-0049** (≥5 TCs d-test framework)
+- **ADR-0055 §1** (Cadence Rule 1 atomic)
+- **d033** (sister-pattern regression — `scripts/tests/d033-4-soul-coverage.sh`)
+
 ## Identity
 
 - Role: Architect — Decisions, Designs, 9-Lens Reviews.

@@ -1,32 +1,37 @@
 #!/usr/bin/env bash
-# d033-4-soul-coverage.sh — regression for #287
-# (Template-side verification that §Doctrine Reminder is in all 4 shared soul .tmpl files)
+# d033-5-soul-coverage.sh — regression for #287 + tmpl#172 (Sprint 32 cycle ~#3740-style)
+# (Template-side verification that §Doctrine Reminder is in all 5 shared soul .tmpl files)
 #
 # Why this test exists
 # --------------------
 # Issue #287 (Sprint 5 P1): §Doctrine Reminder soul patch — port to
 # atilcan65/dev-studio-template (depends on #280).
+# tmpl#172 (Sprint 32 P1): d033 sister-pattern — expand scope from 4 → 5 files
+# (add orchestrator per Issue #172 AC1 + Issue #287 scope clarification).
 #
 # Per PR #288 (AtilCalc) + Issue #238 P0 doctrine (sub-task 1):
-# All 4 shared soul files (developer/architect/product-manager/tester) MUST
-# contain a "## Doctrine Reminder — no self-standby" section so newly
+# All 5 shared soul files (orchestrator/developer/architect/product-manager/tester) MUST
+# contain a "## §Doctrine Reminder — no self-standby" section so newly
 # bootstrapped repos inherit the no-self-standby doctrine from soul-read
 # time (per ADR-0002 autonomy loop — agents read .claude/agents/<role>.md FIRST).
 #
 # This test verifies:
-#   T1: 4 target .tmpl files exist
-#   T2: All 4 contain the doctrine reminder section heading
+#   T1: 5 target .tmpl files exist
+#   T2: All 5 contain the doctrine reminder section heading
 #   T3: Doctrine block content matches AtilCalc's orchestrator.md wording
 #       (consistency check — sample 4 anchor lines)
-#   T4: scripts/owner-apply-soul-patch.sh exists + is idempotent (no-op when
+#   T4: All 5 .tmpl files byte-equal match (Issue #972 sister-pattern — byte-equal
+#       source-of-truth forward-port, includes rendered Archive-Call markers)
+#   T5: scripts/owner-apply-soul-patch.sh exists + is idempotent (no-op when
 #       doctrine is already in place)
 #
 # Template-specific adaptions vs AtilCalculator:
 #   - Tests .md.tmpl files (template storage format), not .md (rendered output).
-#   - T4 verifies idempotency on .tmpl (not .md) since template is source.
+#   - T5 verifies idempotency on .tmpl (not .md) since template is source.
 #   - Test numbering d033 matches AtilCalculator for cross-repo traceability.
 #
 # Sister issue: AtilCalculator #287 (this template port's parent).
+# Sister-issue: tmpl#172 (Sprint 32 P1 — 4 → 5 file scope expansion + § prefix alignment).
 
 set -uo pipefail
 
@@ -46,8 +51,8 @@ section() { printf "\n${B}==== %s ====${D}\n" "$1"; }
 
 # --- constants ---
 SOUL_DIR="$REPO_ROOT/.claude/agents"
-TARGETS=("developer.md.tmpl" "architect.md.tmpl" "product-manager.md.tmpl" "tester.md.tmpl")
-SECTION_HEADING="## Doctrine Reminder — no self-standby"
+TARGETS=("orchestrator.md.tmpl" "developer.md.tmpl" "architect.md.tmpl" "product-manager.md.tmpl" "tester.md.tmpl")
+SECTION_HEADING="## §Doctrine Reminder — no self-standby"
 ANCHOR_LINES=(
   "Reading this section is your pre-pause self-check"
   "If you find yourself reasoning toward ANY of the"
@@ -58,7 +63,7 @@ ANCHOR_LINES=(
 cd "$REPO_ROOT"
 
 # ============================================================================
-section "T1: 4 target .tmpl files exist"
+section "T1: 5 target .tmpl files exist"
 missing=()
 for f in "${TARGETS[@]}"; do
   if [ ! -f "$SOUL_DIR/$f" ]; then
@@ -66,13 +71,13 @@ for f in "${TARGETS[@]}"; do
   fi
 done
 if [ "${#missing[@]}" -eq 0 ]; then
-  pass "all 4 target .tmpl files exist: ${TARGETS[*]}"
+  pass "all 5 target .tmpl files exist: ${TARGETS[*]}"
 else
-  fail "missing .tmpl files" "expected 4, missing ${#missing[@]}: ${missing[*]}"
+  fail "missing .tmpl files" "expected 5, missing ${#missing[@]}: ${missing[*]}"
 fi
 
 # ============================================================================
-section "T2: All 4 .tmpl files contain '$SECTION_HEADING'"
+section "T2: All 5 .tmpl files contain '$SECTION_HEADING'"
 uncovered=()
 for f in "${TARGETS[@]}"; do
   target="$SOUL_DIR/$f"
@@ -82,7 +87,7 @@ for f in "${TARGETS[@]}"; do
   fi
 done
 if [ "${#uncovered[@]}" -eq 0 ]; then
-  pass "4/4 .tmpl files contain §Doctrine Reminder section"
+  pass "5/5 .tmpl files contain §Doctrine Reminder section"
 else
   fail "files missing §Doctrine Reminder" "uncovered: ${uncovered[*]}"
 fi
@@ -90,7 +95,7 @@ fi
 # ============================================================================
 section "T3: Doctrine block content matches AtilCalc's orchestrator.md (anchor-line consistency)"
 # Sample 4 anchor lines that appear in AtilCalc orchestrator.md's §Doctrine Reminder.
-# If they appear in all 4 template .tmpl files, content parity is confirmed.
+# If they appear in all 5 template .tmpl files, content parity is confirmed.
 missing_anchors=()
 for f in "${TARGETS[@]}"; do
   target="$SOUL_DIR/$f"
@@ -102,34 +107,54 @@ for f in "${TARGETS[@]}"; do
   done
 done
 if [ "${#missing_anchors[@]}" -eq 0 ]; then
-  pass "4/4 .tmpl files match AtilCalc doctrine content (${#ANCHOR_LINES[@]} anchor lines each)"
+  pass "5/5 .tmpl files match AtilCalc doctrine content (${#ANCHOR_LINES[@]} anchor lines each)"
 else
   fail "doctrine content diverged from AtilCalc" "missing anchors: ${missing_anchors[*]}"
 fi
 
 # ============================================================================
-section "T4: scripts/owner-apply-soul-patch.sh exists + is idempotent"
+section "T4: 5 .tmpl files byte-equal match (Issue #972 sister-pattern)"
+# Per Issue #972 + Issue #172 AC2: §Doctrine Reminder text is byte-equal
+# across all .tmpl files (source-of-truth forward-port invariant). New in tmpl#172
+# expansion — verifies single-source-of-truth content parity.
+if [ "${#TARGETS[@]}" -lt 2 ]; then
+  pass "T4 trivially satisfied (fewer than 2 target files)"
+else
+  reference=""
+  divergent=()
+  for f in "${TARGETS[@]}"; do
+    target="$SOUL_DIR/$f"
+    [ -f "$target" ] || continue
+    # Extract §Doctrine Reminder section (from heading to next ## heading or EOF)
+    extracted=$(awk '/^## §Doctrine Reminder — no self-standby/{flag=1; next} /^## /{flag=0} flag' "$target")
+    if [ -z "$reference" ]; then
+      reference="$extracted"
+    elif [ "$extracted" != "$reference" ]; then
+      divergent+=("$f")
+    fi
+  done
+  if [ "${#divergent[@]}" -eq 0 ]; then
+    pass "5/5 .tmpl files byte-equal match for §Doctrine Reminder section (Issue #972 sister-pattern)"
+  else
+    fail "doctrine content not byte-equal across all targets" "divergent: ${divergent[*]}"
+  fi
+fi
+
+# ============================================================================
+section "T5: scripts/owner-apply-soul-patch.sh exists + is idempotent"
 SCRIPT="$REPO_ROOT/scripts/owner-apply-soul-patch.sh"
 if [ ! -x "$SCRIPT" ]; then
   fail "owner-apply-soul-patch.sh missing or not executable" "expected: $SCRIPT (mode 0755)"
 else
-  # Capture pre-state (checksums) of all 4 .tmpl files
+  # Capture pre-state (checksums) of all 5 .tmpl files
   pre_hashes=()
   for f in "${TARGETS[@]}"; do
     target="$SOUL_DIR/$f"
     [ -f "$target" ] && pre_hashes+=("$(sha256sum "$target" | cut -d' ' -f1)")
   done
 
-  # Run script (should be idempotent no-op since doctrine already in template)
-  # We don't run 'git checkout -b' side-effects; we only test the apply logic.
-  # Strategy: source the script's apply portion in a sandboxed way, OR just
-  # verify idempotency via direct grep-based dry-run.
-  # Simpler approach: hash post-state without running script (since doctrine
-  # is already in template per T2/T3). If hashes unchanged → idempotent state
-  # is satisfied. The actual idempotency property is exercised by the script
-  # itself (skip-if-exists branch), which is a script-level invariant.
-
-  # Hash post-state (no script run since doctrine is already present)
+  # Hash post-state (no script run since doctrine is already present) — verify
+  # state is stable. Script-level idempotency is exercised by the script itself.
   post_hashes=()
   for f in "${TARGETS[@]}"; do
     target="$SOUL_DIR/$f"
@@ -145,7 +170,7 @@ else
   done
 
   if [ "${#drift[@]}" -eq 0 ]; then
-    pass "owner-apply-soul-patch.sh present + idempotent state verified (4/4 hashes stable)"
+    pass "owner-apply-soul-patch.sh present + idempotent state verified (5/5 hashes stable)"
   else
     fail "files drifted between checksums" "drift: ${drift[*]}"
   fi
@@ -159,10 +184,10 @@ printf "  ${R}FAIL${D}: %d\n" "$FAIL"
 if [ "$FAIL" -gt 0 ]; then
   echo
   echo "d033 REGRESSION FAILED — template soul-coverage contract violated."
-  echo "Fix: ensure 4/4 .tmpl files in .claude/agents/ contain '## Doctrine Reminder' section"
-  echo "     and scripts/owner-apply-soul-patch.sh exists + is idempotent."
+  echo "Fix: ensure 5/5 .tmpl files in .claude/agents/ contain '## §Doctrine Reminder' section"
+  echo "     (byte-equal content per Issue #972 sister-pattern) and scripts/owner-apply-soul-patch.sh exists + is idempotent."
   exit 1
 fi
 echo
-echo "d033 REGRESSION PASS — template §Doctrine Reminder soul coverage honored (4/4)."
+echo "d033 REGRESSION PASS — template §Doctrine Reminder soul coverage honored (5/5, byte-equal)."
 exit 0
