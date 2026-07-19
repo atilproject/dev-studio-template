@@ -115,6 +115,12 @@ resolve_values() {
   # Calendar year for LICENSE.tmpl Copyright line (Sprint 29 W2B+ S29-016 P0).
   YEAR="$(date -u +%Y)"
 
+  # Template version (ADR-XXXX-TEMPLATE-VERSION-PLACEHOLDER — Closes #185).
+  # Resolved from the latest git tag on the repo. Env override allows downstream
+  # consumers to pin a specific version without re-tagging the rendered project.
+  # Falls back to literal "dev" when no tags exist (fresh clone before first tag).
+  TEMPLATE_VERSION="${DEV_STUDIO_TEMPLATE_VERSION:-$(git -C "$REPO_ROOT" describe --tags --abbrev=0 2>/dev/null || echo 'dev')}"
+
   printf '\n%s  Placeholder values resolved:%s\n' "$C_BOLD" "$C_RESET"
   printf '    REPO_ROOT        = %s\n' "$REPO_ROOT"
   printf '    GITHUB_OWNER     = %s\n' "$GITHUB_OWNER"
@@ -122,7 +128,8 @@ resolve_values() {
   printf '    HUMAN_OWNER_NAME = %s\n' "$HUMAN_OWNER_NAME"
   printf '    PROJECT_NAME     = %s\n' "$PROJECT_NAME"
   printf '    HEARTBEAT_DIR    = %s\n' "$HEARTBEAT_DIR"
-  printf '    YEAR             = %s\n\n' "$YEAR"
+  printf '    YEAR             = %s\n' "$YEAR"
+  printf '    TEMPLATE_VERSION = %s\n\n' "$TEMPLATE_VERSION"
 }
 
 # --- Ensure PROJECT_TOKEN secret is set on the repo (ADR-0014) ------------
@@ -442,6 +449,7 @@ render_one() {
       -e "s|{{PROJECT_NAME}}|${PROJECT_NAME}|g" \
       -e "s|{{HEARTBEAT_DIR}}|${HEARTBEAT_DIR}|g" \
       -e "s|{{YEAR}}|${YEAR}|g" \
+      -e "s|{{TEMPLATE_VERSION}}|${TEMPLATE_VERSION}|g" \
       "$src" > "$dst"
 
   # Preserve executable bit if source had it (relevant for shell templates).
