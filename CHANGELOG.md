@@ -155,6 +155,21 @@ CHANGELOG v0.4.0 bump (AC4).
 
 ## [Unreleased]
 
+### Added
+
+- **S32-020 [DEV] — `scripts/tests/d-smoke-bootstrap-v110.sh` smoke repo bootstrap
+  verifier at v1.1.0** (Issue #160, RED-first per ADR-0044). 5 RED TCs verify
+  post-S32-019 v1.1.0 tag cut + smoke-v110 repo creation + bootstrap state
+  (ci.yml present, 34 labels seeded, main HEAD == v1.1.0 tag SHA via Issue #972
+  Path-Verify Doctrine). Sprint 32 Wave 6 dev-lane, gated on S32-019 #159 tag
+  (owner lane per ADR-0031 + cycle ~#3196). Sister-pattern:
+  `d-verify-portage-diff-engine.sh` + `s29-005-verify-portage.sh` + Issue #972.
+  Cycle ~#3670 d-test authored + RED verified locally on tmpl origin/main HEAD
+  `4274ddce` (5/5 RED). Cadence Rule 1 atomic (ADR-0055 §1): d-test +
+  `scripts/tests/INDEX.md` row + this CHANGELOG entry. PR will anchor
+  `Closes atilproject/dev-studio-template#160` (ADR-0057 auto-close) +
+  `Refs atilproject/dev-studio-template#159` (sister-ref, no auto-close).
+
 ### Changed
 
 - **#39 — `§Doctrine Reminder — no self-standby` (Issue #238) replaces Issue #119
