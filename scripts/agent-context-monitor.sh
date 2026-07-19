@@ -42,12 +42,24 @@ COOLDOWN_MIN="${COOLDOWN_MIN:-10}"
 TMUX_SESSION="${TMUX_SESSION:-dev-studio}"
 TMUX_WINDOW="${TMUX_WINDOW:-main}"
 DRY_RUN="${DRY_RUN:-0}"
-# Stuck-pane / API-overflow detection (new in stuck-pane fix).
-STUCK_AFTER_MIN="${STUCK_AFTER_MIN:-20}"
-# When the agent is pinned at CRITICAL_PCT (100%), use a much tighter window:
+# Stuck-pane / API-overflow detection.
+# Per ADR-0072 §Layer 1 Watchdog tuning revision (Sprint 32 Wave-extension):
+#   STUCK_AFTER_MIN default 1→10 (10 minutes breathing room)
+#   STUCK_AFTER_MIN_CRITICAL default 0→5 (5 minutes rapid-fire at 100% saturation)
+# Rationale: cycle #1638 (Issue #725) tightened these to 1 / 0 (instant-fire per
+# owner directive), which produced 214 false-positive cleared=yes events across
+# the 7-day journal window (correlated 100% with stuck_override triggers).
+# 10/5 chosen because /compact worst-case 90s + 8-minute margin covers all
+# legitimate operation overhead (large context compacts, complex reasoning,
+# peer-poke auto-response). Saturation threshold table:
+#   pct >= CRITICAL_PCT (100%): STUCK_AFTER_MIN_CRITICAL 5min (was 0min — too aggressive)
+#   pct < CRITICAL_PCT && pct >= THRESHOLD_PCT (75%): STUCK_AFTER_MIN 10min (was 1min — too aggressive)
+#   pct < THRESHOLD_PCT (75%): watchdog-only path, no stuck_override
+STUCK_AFTER_MIN="${STUCK_AFTER_MIN:-10}"
+# When the agent is pinned at CRITICAL_PCT (100%), use a tighter window:
 # /compact normally takes 30-90s; if pct hasn't moved in this many minutes,
 # /compact has failed and /clear is the only escape hatch.
-STUCK_AFTER_MIN_CRITICAL="${STUCK_AFTER_MIN_CRITICAL:-3}"
+STUCK_AFTER_MIN_CRITICAL="${STUCK_AFTER_MIN_CRITICAL:-5}"
 ESCALATE_STUCK_TO_CLEAR="${ESCALATE_STUCK_TO_CLEAR:-1}"
 
 # Resolve project name.

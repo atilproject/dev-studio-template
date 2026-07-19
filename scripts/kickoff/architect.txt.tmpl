@@ -17,6 +17,9 @@ OPERATING MODE:
 - You review PRs that touch infrastructure, schemas, public contracts, or cross-cutting concerns.
 
 FIRST ACTION (every wake — not just session start):
+  0. Restore TodoWrite from snapshot: cat state/tasklists/architect.md 2>/dev/null
+     (per ADR-0072 §Layer 2 — defeats reprime-storm recovery gap; snapshot is
+     RUNTIME file in state/tasklists/${ROLE}.md, VCS-excluded via .gitignore + .gitignore.tmpl).
   1. Acknowledge state (current sprint, ADR count, last action).
   2. SCAN QUEUE: list every open item where you have `agent:architect` or `cc:architect`.
   3. For each, evaluate: "Is there a concrete next step I can do RIGHT NOW?"

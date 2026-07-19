@@ -170,8 +170,8 @@ if pane shows API overflow error  →  use_clear = 1
 elif pane is busy ("Worked for...", "Cogitated for...",
                    "Compacting conversation", etc.):
   if pane is likely STUCK:
-    if pct >= CRITICAL_PCT: window = STUCK_AFTER_MIN_CRITICAL (3 min)
-    else:                   window = STUCK_AFTER_MIN          (20 min)
+    if pct >= CRITICAL_PCT: window = STUCK_AFTER_MIN_CRITICAL (5 min)
+    else:                   window = STUCK_AFTER_MIN          (10 min)
     stuck = (now - last_reprime_utc) >= window
             AND last_pct_change_utc <= last_reprime_utc
     if stuck and ESCALATE_STUCK_TO_CLEAR=1:
@@ -201,9 +201,26 @@ else:
 | `CRITICAL_PCT` | 100 | Sustained-critical floor |
 | `CRITICAL_SUSTAIN_MIN` | 5 | Minutes at CRITICAL before warning |
 | `COOLDOWN_MIN` | 10 | Minimum gap between reprimes per role |
-| `STUCK_AFTER_MIN` | 20 | Minutes of frozen pct (pct < 100%) before declaring the pane stuck |
-| `STUCK_AFTER_MIN_CRITICAL` | 3 | Tighter stuck window when pct >= CRITICAL_PCT (`/compact` should land in under a minute) |
+| `STUCK_AFTER_MIN` | 10 | Minutes of frozen pct (pct < 100%) before declaring the pane stuck |
+| `STUCK_AFTER_MIN_CRITICAL` | 5 | Tighter stuck window when pct >= CRITICAL_PCT (`/compact` should land in under a minute) |
 | `ESCALATE_STUCK_TO_CLEAR` | 1 | When a pane is stuck, escalate from `/compact` to `/clear` (hard reset) |
+
+**Defaults rationale (ADR-0072 §Layer 1, cycle #1638 → 7-day 214-false-positive journal):**
+
+- `STUCK_AFTER_MIN=10`: 7-day production journal showed 20-min default caused
+  214 false-positive reprime firings where `/compact` would have completed
+  naturally (reprime storm). 10-min gives `/compact` a fair 5-10 min window
+  before declaring stuck — empirically where `/compact` recovery sits.
+- `STUCK_AFTER_MIN_CRITICAL=5`: when pct >= 100%, `/compact` should land
+  in 30-90s. 5-min catches genuine stuck-at-100% cases without prematurely
+  escalating to `/clear` (which loses TodoWrite state).
+- Saturation thresholds observed in production (calc + tmpl, 7-day window):
+  - 90-95%: brief during heavy reads — no reprime (THRESHOLD_PCT=85 floors it)
+  - 95-99%: stable, ~2-3min recovery via `/compact`
+  - 100%: `/compact` lands in 30-90s for 89% of cases, 5-15min tail
+  - 100% > 15min: only `/clear` recovers (cleared=yes event in journal)
+
+Owner may ratify different values via `systemctl --user edit` drop-in.
 
 Override with: `systemctl --user edit dev-studio-context-monitor@<PROJECT>.service`
 
@@ -297,7 +314,81 @@ When either detector trips, the watchdog calls `reprime-agent.sh` with
 Cooldown is bypassed when `use_clear=1`. Pathological states (stuck or
 overflow) should not wait another 10-minute cooldown window.
 
-## 7. What Does NOT Need Re-priming
+## 7. Task-list Persistence Protocol
+
+**Status:** Active (ADR-0072 / ADR-0073, Sprint 32 Wave-extension).
+**Purpose:** Defeat reprime-storm recovery gap. When `/clear` fires mid-task,
+agents lose their in-memory `TodoWrite` state. Without persistence, the agent
+must rebuild the task list from GitHub (`agent:*` labels, PR head refs, issue
+comments) — a 2-5min scrape that costs more context than it saves and
+regularly drops sub-tasks that were never GitHub-anchored.
+
+### 7.1 Snapshot lifecycle
+
+| Phase | Trigger | Action |
+|-------|---------|--------|
+| Write | Agent updates `TodoWrite` (any state change) | `tasklist-snapshot.sh <ROLE> <JSON_TODO_STATE>` writes `state/tasklists/${ROLE}.md` atomically |
+| Read | First action on every wake (NOT just session start) | `cat state/tasklists/${ROLE}.md 2>/dev/null && restore TodoWrite from snapshot` |
+| Rotate | Sprint boundary (sprint close ceremony) | Orchestrator-driven cleanup; old snapshots are runtime-only and accumulate |
+
+### 7.2 Snapshot file format
+
+```markdown
+<!-- tasklist-snapshot role:${ROLE} ts:${ISO8601} -->
+
+## In-progress
+- [ ] task-1 (status: pending)
+
+## Pending
+- [ ] task-2 (status: pending)
+- [ ] task-3 (status: pending)
+```
+
+- Frontmatter: `<!-- tasklist-snapshot role:${ROLE} ts:${ISO8601} -->` (machine-readable, single line)
+- Body: markdown checklist with one bullet per `TodoWrite` entry
+- Status values: `pending`, `in_progress`, `completed`
+- File extension: `.md` (human-readable AND machine-parseable)
+
+### 7.3 Where snapshots live
+
+- Path: `state/tasklists/${ROLE}.md`
+- `state/tasklists/` is **VCS-excluded** (runtime file, gitignored at repo root via `.gitignore` + `.gitignore.tmpl`)
+- Directory bootstrapped via `state/tasklists/.gitkeep` on first init
+- Sister-script: `scripts/atomic-write.sh` (Issue #237 doctrine — write-to-temp + `sync` + `mv` for atomicity)
+
+### 7.4 Cadence Rule 1 atomic (ADR-0055 §1)
+
+The following MUST land in the SAME commit cluster:
+
+1. `scripts/tasklist-snapshot.sh` (the writer)
+2. `scripts/reprime-agent.sh` (MESSAGE_HEAD append: snapshot-restore directive)
+3. `scripts/kickoff/${ROLE}.txt.tmpl` (FIRST ACTION block: snapshot restore)
+4. `scripts/agent-context-monitor.sh` (watchdog tuning — STUCK_AFTER_MIN defaults)
+5. `systemd/dev-studio-context-monitor@.service` (Environment= lines)
+6. `.gitignore` + `.gitignore.tmpl` (`state/tasklists/*.md` runtime entry)
+7. `docs/CONTEXT-HYGIENE.md` (§6.3 + §6.4 + §7 update)
+8. `scripts/tests/d108-tasklist-snapshot-write-through.sh` (NEW, ≥6 TCs per ADR-0049)
+9. `scripts/tests/d1XX-compact-breathing-room.sh` (NEW, ≥6 TCs, STUCK_AFTER_MIN=10 verification)
+10. `scripts/tests/d108-context-watchdog-instant-fire.sh` (regression update)
+11. `scripts/tests/INDEX.md` (3 new rows — Cadence Rule 1 atomic with the d-test files)
+
+Reason: implementation, d-test, and INDEX.md entry MUST land together so the
+d-test pattern (ADR-0049) is enforceable. Splitting them across PRs would
+mean a partial impl could merge without its d-test, defeating RED-first.
+
+### 7.5 Trade-offs (ADR-0072 §Trade-offs)
+
+1. **Slower stuck-pane detection**: 5-10min vs 0-1min. Trade-off: humans can
+   manually `/clear` within 5min if needed (owner-only path, no impact on
+   autonomy loop).
+2. **Snapshot file accumulation**: `state/tasklists/*.md` runtime files, not
+   VCS-tracked. Manual cleanup task for agents (rotate old snapshots at sprint
+   boundary).
+3. **Tasklist restore race**: if `/clear` fires mid-snapshot-write, restore may
+   miss last task. Mitigation: atomic write-to-temp + `mv` pattern per
+   `scripts/atomic-write.sh` sister-pattern (Issue #237 doctrine).
+
+## 8. What Does NOT Need Re-priming
 
 - Minor PR comment exchanges.
 - Scheduled idle time (agent does nothing → cannot drift).
@@ -307,7 +398,7 @@ overflow) should not wait another 10-minute cooldown window.
 > by Claude Code)" here. That assumption proved unsafe under sustained
 > multi-agent load — see § 6.1. The Context Watchdog now backstops it.
 
-## 8. Agent-side Protocol
+## 9. Agent-side Protocol
 
 Each role doc (`.claude/agents/*.md`) carries a **REPRIME Protocol**
 section that defines exactly how an agent must respond when it receives

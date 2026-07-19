@@ -192,7 +192,16 @@ if [ -n "$JOURNAL_SCRIPT" ]; then
 fi
 
 # ── STEP 3: build re-prime message ──────────────────────────────────────────
-MESSAGE_HEAD="[REPRIME] Doctrine may have changed and/or your context was compacted. Before your next action:"
+# Per ADR-0072 §Layer 2 Task-list Persistence Protocol, the FIRST ACTION on
+# reprime is to restore TodoWrite from the snapshot file (defeats reprime-storm
+# recovery gap when /clear wipes in-context TodoWrite state). The snapshot
+# file lives at state/tasklists/${ROLE}.md (runtime, VCS-excluded per
+# .gitignore + .gitignore.tmpl). The `2>/dev/null` guards first-session
+# agents who have no snapshot yet.
+MESSAGE_HEAD="[REPRIME] Doctrine may have changed and/or your context was compacted. Before your next action:
+
+0. First action MUST be: cat state/tasklists/${ROLE}.md 2>/dev/null && restore TodoWrite from snapshot
+   (per ADR-0072 §Layer 2 — defeats reprime-storm recovery gap; snapshot is RUNTIME file in state/tasklists/${ROLE}.md, VCS-excluded)."
 
 KICKOFF_LINE=""
 if [ -n "$KICKOFF_TMPL" ]; then
