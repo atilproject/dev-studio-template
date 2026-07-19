@@ -8,6 +8,56 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Fixed
 
+- **d-smoke-bootstrap-v110 TC4+TC5 amendment (cycle ~#3940Q+9, Phase B d-test self-heal).**
+  After PR #185 (arch init.sh `TEMPLATE_VERSION` resolver) + PR #188
+  (d-test TC1+TC2 infra fix) cluster-squash MERGED (cycle ~#3731,
+  10:10:02Z + 10:31:28Z, sha `925f4e79` + `ac6da232`), Phase B
+  re-execution surfaced two **test expectation gaps** (not impl
+  regressions): **(a) TC4** asserted `label count = 34` (strict equality)
+  but smoke-v110 actually has **43 labels** = 34 from `bootstrap-labels.sh`
+  + 9 GitHub defaults (`bug`, `documentation`, `duplicate`, `enhancement`,
+  `good first issue`, `help wanted`, `invalid`, `question`, `wontfix`)
+  which GitHub auto-installs on private-repo creation. Fix: change
+  `-eq 34` → `-ge 34` — proves `bootstrap-labels.sh` ran while tolerating
+  GH-default extras (minimal-touch per tester recommendation §6). **(b) TC5**
+  asserted `main HEAD SHA == tag SHA` (strict equality) per Issue #972
+  Path-Verify Doctrine, but Phase B AC3 verification commit
+  (`test: Phase B bootstrap-labels 34 labels seed (Issue #160 AC3 verify)`
+  @ 11:15:47Z, sha `69524905`) legitimately adds a commit on top of the
+  v1.1.0 tag (`401c22cd4c41`), so equality fails. Cycle ~#3682 Defect #2
+  framing correction already established that GitHub's `gh repo create
+  --template` produces a synthetic initial commit (not the v1.1.0 tag
+  commit). First v3 attempt was descendant-of via
+  `compare/{tag}...{head}` endpoint — also fails because the v1.1.0 tag
+  commit `401c22cd` is NOT in smoke-v110's commit history at all
+  (synthetic-init copies files into a NEW commit without tag-graph
+  continuity, so compare endpoint returns HTTP 404 on intra-repo compare
+  for unknown base). **Final fix (v3)**: content blob SHA equivalence on
+  a canonical unchanged file. Git's content-addressable storage guarantees
+  blob SHA = content bytes, so matching blob SHA between
+  `tmpl@refs/tags/v1.1.0/contents/scripts/dev-studio-init.sh` and
+  `smoke-v110@refs/heads/main/contents/scripts/dev-studio-init.sh` proves
+  byte-identical content regardless of commit-graph discontinuity.
+  Verified: blob=`c08152bf3dd576be6efc4afd8f3167fc0ee04948` on both sides.
+  Helper `curl_json_compare_status` retired (kept in file for reference
+  with doc comment); reuses pre-existing `curl_json_object_sha`. Result:
+  TC0-TC7 GREEN 7/7 on `atilcan65/smoke-v110` post-cluster-squash (verified
+  locally on cycle ~#3940Q+9 by dev lane after tester re-verify cmt
+  `5017020110`). Phase B end-to-end AC1-AC5 verification COMPLETE — ready
+  for Phase B PR (`Closes atilproject/dev-studio-template#160`) per
+  ADR-0057 + cycle ~#3471 Refs-not-Closes Phase A/B discipline.
+  Sister-pattern: ADR-0044 (RED-first TDD — non-vacuous expectation gap
+  detection), ADR-0049 (≥5 TC baseline + ≥2 sister-pattern met),
+  ADR-0055 §1 (Cadence Rule 1 atomic — d-test + INDEX.md + CHANGELOG
+  same commit cluster), ADR-0057 (`Closes #N` strict format), Issue #972
+  (Path-Verify Doctrine extended to content-equivalence), cycle ~#3682
+  (Defect #2 framing — synthetic initial commit breaks commit-graph
+  descendant-of; cycle ~#3940Q+9 documented that **content** equivalence
+  survives where **commit-graph** equivalence cannot), cycle ~#3940Q+9
+  (tester re-verify RED → dev amend → GREEN self-heal pattern, with
+  intermediate failed attempts: strict-equality ✗ → descendant-of via
+  compare ✗ → content-equivalence via blob SHA ✓).
+
 - **d-smoke-bootstrap-v110 TC1+TC2 self-fix (Issue #186, P1).** The v1.1.0 d-test
   shipped in PR #183 had two latent bugs that surfaced during S32-020 Phase B
   smoke bootstrap verification (cycle ~#3682): **(a) TC1** used top-level
