@@ -11,10 +11,16 @@ Environment=PROJECT_NAME=%i
 Environment=TMUX_SESSION=dev-studio
 Environment=TMUX_WINDOW=main
 # Defaults can be overridden via drop-in /etc/systemd/system/dev-studio-context-monitor@%i.service.d/override.conf
+# Defaults per ADR-0072 §Layer 1 (Sprint 32 Wave-extension, owner-ratified 2026-07-19)
+# - STUCK_AFTER_MIN=10: 7-day journal showed 20-min default caused 214 false-positive reprime firings
+# - STUCK_AFTER_MIN_CRITICAL=5: catches genuine stuck-at-100% without premature /clear escalation
+# See docs/CONTEXT-HYGIENE.md §6.4 for full rationale + saturation thresholds table
 Environment=THRESHOLD_PCT=85
 Environment=CRITICAL_PCT=100
 Environment=CRITICAL_SUSTAIN_MIN=5
 Environment=COOLDOWN_MIN=10
+Environment=STUCK_AFTER_MIN=10
+Environment=STUCK_AFTER_MIN_CRITICAL=5
 ExecStart=/bin/bash %h/projects/%i/scripts/agent-context-monitor.sh
 StandardOutput=journal
 StandardError=journal
