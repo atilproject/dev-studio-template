@@ -196,3 +196,73 @@ Alternative (c) matches the **boring tech wins** heuristic: it adds one label fo
 - **ADR-0020** (label-mutation transactionality) — closes the structural TD-004/TD-006/TD-008 class via wrapper tooling.
 - **ADR-0021** (docs PR convention) — closes the docs-PR subclass of TD-006 via convention discipline.
 - **ADR-0024** (this ADR) — closes the watchdog target class of TD-006 via schema redesign (`verdict-by:<ts>` + `stale_verdict` event).
+
+---
+
+## Amendment
+
+Folded amendments per **ADR-0057 §amendment-via-parent** (Path A v26 source-of-truth = calc-side standalone amendment file; tmpl-side = section in parent ADR).
+
+### Amendment ?: auto-verdict-by hook (folded per ADR-0057 §amendment-via-parent)
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-06-29
+- **Origin:** (see calc source)
+- **Source (calc canonical):** [ADR-0024-amendment-auto-verdict-by-hook](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0024-amendment-auto-verdict-by-hook.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0024-amendment-auto-verdict-by-hook.md` file does NOT exist (will not be created); amendment lineage trace via slug reference in this section.
+- **Sister-patterns:** ADR-0057 (§amendment-via-parent — fold pattern codification), ADR-0024 §Watchdog logic, ADR-0038 §WIP cap, ADR-0049 §d-test framework, ADR-0055 §1 Cadence Rule 1 atomic
+
+#### Amendment doctrine (extracted from calc canonical §Decision)
+
+**Path A (cheapest, auto-pair on `cc:<peer>` add)** — extend the label-check workflow + add an agent-side peer-poke helper:
+
+### §Auto-Verdict-By Hook Contract
+
+When ANY agent (or Layer 5) adds a `cc:<peer>` label to a PR/issue:
+
+1. **Atomic pair required**: a paired `verdict-by:<iso-timestamp>` label MUST be added in the same `gh issue edit N --add-label ...` invocation (per ADR-0015 atomic handoff).
+2. **Default deadline**: `<iso-timestamp>` = PR creation time + 24h (or configurable via env var `VERDICT_BY_DEFAULT_HOURS=24`).
+3. **Override allowed**: if the agent explicitly sets `verdict-by:<ts>` (non-default), the auto-pair MUST NOT overwrite.
+4. **Silent-skip if `missing_expectation` would fire**: if `cc:<peer>` is present but `verdict-by` is absent on a pre-existing label set, the hook MUST emit a `silent_skip` event per ADR-0045 lens (d) AND auto-inject the default deadline.
+
+### §Implementation: 2 paths (chosen: BOTH, layered)
+
+**Path 1: Workflow YAML hook (`.github/workflows/` — human-only territory, owner merges)**
+
+- File: `.github/workflows/label-check.yml` (sister-extension to Layer 5 verdict-state-aware amendment)
+- Trigger: `pull_request_target.labeled` events filtere
+
+*(Doctrine elided for brevity — see calc canonical source for full text)*
+
+### Amendment ?: stale-verdict-supersede (folded per ADR-0057 §amendment-via-parent)
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-07-04
+- **Origin:** (see calc source)
+- **Source (calc canonical):** [ADR-0024-amendment-stale-verdict-supersede](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0024-amendment-stale-verdict-supersede.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0024-amendment-stale-verdict-supersede.md` file does NOT exist (will not be created); amendment lineage trace via slug reference in this section.
+- **Sister-patterns:** ADR-0057 (§amendment-via-parent — fold pattern codification), ADR-0024 §Watchdog logic, ADR-0038 §WIP cap, ADR-0049 §d-test framework, ADR-0055 §1 Cadence Rule 1 atomic
+
+#### Amendment doctrine (extracted from calc canonical §Decision)
+
+**§Supersede Rule** — amend ADR-0024 §Watchdog logic with the following canonical-deadline semantics:
+
+### 1. Multiple-label canonical deadline
+
+When a PR/issue has multiple `verdict-by:<ts>` labels:
+
+1. **Parse all labels** matching the regex `^verdict-by:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$`.
+2. **Canonical deadline** = `max(parsed_timestamps)` (latest ISO 8601).
+3. **Watchdog gate**: stale_verdict event fires ONLY if `now > canonical_deadline AND no verdict_posted_in_window`.
+4. **Older labels retained** (do NOT delete on supersede — preserves audit trail per ADR-0012 §Cascade-strip discipline).
+
+### 2. Layered defense (2 paths, chosen BOTH)
+
+**Path A: Workflow YAML hook** (`.github/workflows/label-check.yml`, owner-only territory per file ownership matrix)
+
+- **Location**: existing Auto-Verdict-By hook step (ADR-0024-amendment-auto-verdict-by-hook §Path 1).
+- **Behavior**: on `labeled` event with `verdict-by:<new-ts>` AND existing `verdict-by:<older-ts>`, the hook MUST:
+  - (a) Compute canonical = max(new, older)
+  - (b) Emit `verdict_supersede` log line: `supersede verdict_by: <older_ts> → <new_ts> canonical=<canonical>`
+  - (c) NOT remove the older label (audit trail preserv
+
+*(Doctrine elided for brevity — see calc canonical source for full text)*
+

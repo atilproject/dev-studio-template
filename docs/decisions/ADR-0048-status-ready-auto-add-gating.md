@@ -306,3 +306,109 @@ Filter to `cc:*` or `needs-*-signoff` label events via the same verdict-emoji ga
 ---
 
 🤖 Architect ADR draft @ 2026-06-26T11:10Z — Sprint 11 P2 lead, drafting in parallel with PR #430 owner squash (two-way door, reversible if PR #430 owner requests design changes)
+
+---
+
+## Amendment
+
+Folded amendments per **ADR-0057 §amendment-via-parent** (Path A v26 source-of-truth = calc-side standalone amendment file; tmpl-side = section in parent ADR).
+
+### Amendment ?: defensive guard (folded per ADR-0057 §amendment-via-parent)
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-06-29
+- **Origin:** (see calc source)
+- **Source (calc canonical):** [ADR-0048-amendment-initial-add-defensive-guard](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0048-amendment-initial-add-defensive-guard.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0048-amendment-initial-add-defensive-guard.md` file does NOT exist (will not be created); amendment lineage trace via slug reference in this section.
+- **Sister-patterns:** ADR-0057 (§amendment-via-parent — fold pattern codification), ADR-0024 §Watchdog logic, ADR-0038 §WIP cap, ADR-0049 §d-test framework, ADR-0055 §1 Cadence Rule 1 atomic
+
+#### Amendment doctrine (extracted from calc canonical §Decision)
+
+**Three amendments to ADR-0048 §Type-driven reviewer chain table + §Pseudocode:**
+
+### Amendment 1 — Defensive `hasStatus(inReview)` guard (idempotent DELETE)
+
+Replace the unconditional DELETE in all three pseudocode branches (docs / non-docs / unknown) with a presence-check:
+
+```javascript
+// OLD (ADR-0048 §Pseudocode, all 3 branches):
+gh_pr_add_label("status:ready")
+gh_pr_remove_label("status:in-review")  // ← 404 crash if label absent
+
+// NEW (this amendment):
+gh_pr_add_label("status:ready")
+if (hasLabel(pr, "status:in-review")) {  // ← defensive guard
+  gh_pr_remove_label("status:in-review")
+}
+// else: silent skip + log (lens d observability per ADR-0048 amendment #1)
+```
+
+Rationale: Sister-pattern to ADR-0048-amendment-verdict-state-aware §"Idempotency via comments.find" — every state mutation MUST be idempotent (lens e per architect 9-Lens review). DELETE on absent label = 404 + job fail + cycle waste.
+
+### Amendment 2 — `isDraft` skip-guard for `status:ready` auto-add
+
+Add a draft-check BEFORE the type-driven reviewer chain table logic:
+
+```javascript
+// NEW (this amendment, prepended to Layer 5 main logic):
+if (pr.isDraft) {
+  create_audit_comment(marker="adr-0012-status-re
+
+*(Doctrine elided for brevity — see calc canonical source for full text)*
+
+### Amendment ?: verdict-state aware (folded per ADR-0057 §amendment-via-parent)
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-06-29
+- **Origin:** (see calc source)
+- **Source (calc canonical):** [ADR-0048-amendment-verdict-state-aware](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0048-amendment-verdict-state-aware.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0048-amendment-verdict-state-aware.md` file does NOT exist (will not be created); amendment lineage trace via slug reference in this section.
+- **Sister-patterns:** ADR-0057 (§amendment-via-parent — fold pattern codification), ADR-0024 §Watchdog logic, ADR-0038 §WIP cap, ADR-0049 §d-test framework, ADR-0055 §1 Cadence Rule 1 atomic
+
+#### Amendment doctrine (extracted from calc canonical §Decision)
+
+**Path A (cheapest, WARN-not-FAIL)** — extend `label-check.yml` Layer 5 to read PR verdict emoji from `comments[]` (sister to Issue #430 §Pre-citation cross-check) BEFORE auto-promote:
+
+| Verdict emoji in PR comments[] | Layer 5 action | Log emission |
+|--------------------------------|----------------|---------------|
+| 🟢 found | ✅ auto-promote allowed (regression check vs PR #629 + #656 sister-pattern) | standard `promoted` log |
+| 🟡 found | ⏸️ skip auto-promote | `silent_skip` log per ADR-0045 lens (d) |
+| 🔴 found | ⏸️ skip auto-promote | `silent_skip` log per ADR-0045 lens (d) |
+| No verdict found | ⏸️ skip auto-promote | `silent_skip` log per ADR-0045 lens (d) |
+
+**Implementation cost:** ~30 LoC yaml delta in `.github/workflows/label-check.yml` per file ownership matrix human-only territory (owner merges).
+
+**Architect Handoff Discipline table amendment** (sister-pattern, `.claude/agents/architect.md` human-only territory → owner merges):
+- OLD: 🟡 NEEDS CHANGES → `--remove-label cc:architect --add-label cc:developer`
+- NEW: 🟡 NEEDS CHANGES → keep `cc:architect` + `--add-label verdict-by:<ts>` + `--add-label cc:developer` (FIX-LOOP CLOCK + reviewer chain NOT prematurely satisfi
+
+*(Doctrine elided for brevity — see calc canonical source for full text)*
+
+### Amendment 3: initial-trigger verdict-state guard (folded per ADR-0057 §amendment-via-parent)
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-07-01
+- **Origin:** (see calc source)
+- **Source (calc canonical):** [ADR-0048-amendment-3-initial-trigger-verdict-state-guard](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0048-amendment-3-initial-trigger-verdict-state-guard.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0048-amendment-3-initial-trigger-verdict-state-guard.md` file does NOT exist (will not be created); amendment lineage trace via slug reference in this section.
+- **Sister-patterns:** ADR-0057 (§amendment-via-parent — fold pattern codification), ADR-0024 §Watchdog logic, ADR-0038 §WIP cap, ADR-0049 §d-test framework, ADR-0055 §1 Cadence Rule 1 atomic
+
+#### Amendment doctrine (extracted from calc canonical §Decision)
+
+**Amend-3 (chosen) — extend Amend-1's Path A verdict-emoji gate with ABSENT-verdict suppression, scoped to type:docs initial-trigger.**
+
+### Type-driven reviewer chain table — NEW row
+
+| `type:*` value | Required cleared state for `status:ready` auto-add | ADR reference |
+|---|---|---|
+| `type:docs` + `agent:architect` / `agent:product-manager` / `agent:orchestrator` | **`(archCleared OR verdictPresent) AND latestVerdict ∉ {🟡, 🔴}`** | ADR-0048 + THIS amend-3 + Amend-1 (Path A) |
+| `type:bug` / `type:feature` / `type:refactor` / `type:chore` / `type:incident` | `(testerCleared AND verdictPresent) AND latestVerdict ∉ {🟡, 🔴}` | ADR-0048 + Amend-1 (extend verdictPresent to all paths) |
+| All other / unknown `type:*` | Defensive default → Amend-1's verdict-label gate (verdict:changes-requested) | ADR-0048 §Type-driven invariants |
+
+### `verdictPresent` predicate (NEW, post-amend-3)
+
+```yaml
+verdictPresent := (
+  latestVerdict === '🟢'                                    # Path A emoji gate — explicit OK
+  OR hasLabel('verdict:approved')                            # Amend-1 verdict-label taxonomy extension
+  OR verdict-by:<ts> label present                          # ADR-0024 §Schema — ver
+
+*(Doctrine elided for brevity — see calc canonical source for full text)*
+

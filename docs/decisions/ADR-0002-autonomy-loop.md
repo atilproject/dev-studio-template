@@ -164,3 +164,57 @@ Auto-Ping (`notify.sh`) and Autonomy Loop (`agent-watch.sh`) work **together**:
 - **Implementation**: `scripts/agent-watch.sh` (~1300 lines, project-agnostic; refactored in PR #199 to extract `scripts/proactive-board-scan.sh`).
 - **Test coverage**: `scripts/tests/d015-dev-idle-prevention.sh` (9/9 PASS); `scripts/tests/d020-proactive-board-detections.sh` (planned, follow-up to PR #199).
 - **Doctrine amendment history**: ADR-0024 (stale-verdict watchdog), ADR-0025 (bound standby), ADR-0026 (queue-empty wake) — each amends the autonomy loop in response to observed gaps.
+
+---
+
+## Amendment
+
+Folded amendments per **ADR-0057 §amendment-via-parent** (Path A v26 source-of-truth = calc-side standalone amendment file; tmpl-side = section in parent ADR).
+
+### Amendment 1: stale-verdict filter scope (folded per ADR-0057 §amendment-via-parent)
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-06-30
+- **Origin:** (see calc source)
+- **Source (calc canonical):** [ADR-0002-amendment-1-stale-verdict-filter-scope](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0002-amendment-1-stale-verdict-filter-scope.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0002-amendment-1-stale-verdict-filter-scope.md` file does NOT exist (will not be created); amendment lineage trace via slug reference in this section.
+- **Sister-patterns:** ADR-0057 (§amendment-via-parent — fold pattern codification), ADR-0024 §Watchdog logic, ADR-0038 §WIP cap, ADR-0049 §d-test framework, ADR-0055 §1 Cadence Rule 1 atomic
+
+#### Amendment doctrine (extracted from calc canonical §Decision)
+
+**The `stale_verdict` filter MUST scope to verdict-authority lanes ONLY:**
+
+```
+stale_verdict fires for ROLE iff:
+  (agent:ROLE AND verdict-by:<ts> past deadline)
+  OR
+  (cc:human AND verdict-by:<ts> past deadline)
+```
+
+Where ROLE = the agent's role (e.g., `architect`, `developer`, `tester`).
+
+**Verdict authority doctrine** (codified per ADR-0024 + ADR-0031):
+- `agent:<role>` lanes carry verdict authority (PR owner is the verdict source)
+- `cc:human` lane carries owner-merge verdict authority (ADR-0031 owner merge gate)
+- `cc:<peer>` lanes carry NO verdict authority — they are informational only (ADR-0015 queue-passing)
+
+**Concrete filter change** (in `scripts/agent-watch.sh` line 1090):
+
+```bash
+# BEFORE (current — INCORRECT):
+gh pr list --label "cc:${ROLE}" --state open --limit 50 ...
+
+# AFTER (corrected — verdict-authority lanes only):
+# Filter logic in jq: agent:<role> OR cc:human + verdict-by:* past deadline.
+# gh pr list can stay broad; jq applies the verdict-authority gate.
+gh pr list \
+  --label "agent:${ROLE}" \
+  --label "cc:human" \
+  --state open \
+  --limit 50 \
+  --json number,title,url,updatedAt,headRefOid,labels,files,statusCheckRollup
+```
+
+(Note: `gh pr list --labe
+
+*(Doctrine elided for brevity — see calc canonical source for full text)*
+
