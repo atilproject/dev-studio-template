@@ -221,3 +221,37 @@ Sister-pattern: ADR-0056 Layer 5 idempotency reconcile — cheaper fix (WARN + f
 | (k) JS syntactic correctness | N/A | no JS in this ADR |
 
 — @architect, 2026-06-28T<draft-cycle>+03:00, ADR-0057 Closes-anchor guard (Sprint 16 P1 doctrine hardening, Closes Issue #560 AC1, codifies parser-friendly Closes anchor doctrine + ADR-0015 fallback + verification pattern, arch lane doctrine)
+
+---
+
+## Amendment
+
+Folded amendments per **ADR-0057 §amendment-via-parent** (Path A v26 source-of-truth = calc-side standalone amendment file; tmpl-side = section in parent ADR).
+
+### Amendment ?: closes-vs-refs intent (folded per ADR-0057 §amendment-via-parent)
+
+- **Status:** Accepted (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-07-07
+- **Origin:** (see calc source)
+- **Source (calc canonical):** [ADR-0057-amendment-closes-vs-refs-intent](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0057-amendment-closes-vs-refs-intent.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0057-amendment-closes-vs-refs-intent.md` file does NOT exist (will not be created); amendment lineage trace via slug reference in this section.
+- **Sister-patterns:** ADR-0057 (§amendment-via-parent — fold pattern codification), ADR-0024 §Watchdog logic, ADR-0038 §WIP cap, ADR-0049 §d-test framework, ADR-0055 §1 Cadence Rule 1 atomic
+
+#### Amendment doctrine (extracted from calc canonical §Decision)
+
+Adopt **§Closes-vs-Refs Intent Rule (canonical)** as a new sub-section of ADR-0057. The rule codifies that the choice between `Closes:`/`Fixes:`/`Resolves:` vs `Refs:` depends on **CLOSE INTENT**, not on fix type or PR description conventions.
+
+### §Closes-vs-Refs Intent Rule (canonical)
+
+**Rule**: The choice between `Closes:` (and equivalents `Fixes:`, `Resolves:`) vs `Refs:` depends on whether the PR **RESOLVES** the referenced issue.
+
+| Anchor | Intent | Auto-close on merge? | When to use |
+|--------|--------|----------------------|-------------|
+| **`Closes:`** (or `Fixes:`, `Resolves:`) | **CLOSE INTENT** — PR resolves the issue | ✅ Yes | PR fixes, resolves, or otherwise closes the issue |
+| **`Refs:`** | **INFORMATIONAL** — PR is RELATED but does NOT close | ❌ No | Pure cross-reference; PR mentions/depends on the issue but does not close it |
+
+### Key clarifications
+
+1. **Fix type doesn't matter**: Whether the PR is `impl` (code change), `test` (d-test PR), `docs` (ADR/doc change), `chore` (refactor), or `type:refactor` (test-data migration) — if it RESOLVES the issue, use `Closes:`. **Test-data-migration PRs closing bug issues MUST use `Closes:`.** The migration IS the fix.
+
+*(Doctrine elided for brevity — see calc canonical source for full text)*
+

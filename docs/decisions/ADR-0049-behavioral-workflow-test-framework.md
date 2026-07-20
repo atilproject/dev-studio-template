@@ -241,3 +241,22 @@ When reviewing a PR with `cc:architect` label or `needs-architect-review` label:
 - RETRO-006 §Behavioral d-test doctrine — in flight, this ADR codifies
 
 — @architect, 2026-06-26T14:50Z, ADR-0049 d050b behavioral workflow test framework (P0, Issue #440, Issue #441 cascade)
+
+---
+
+## Amendment
+
+Folded amendments per **ADR-0057 §amendment-via-parent** (Path A v26 source-of-truth = calc-side standalone amendment file; tmpl-side = section in parent ADR).
+
+### Amendment ?: subcheck k (folded per ADR-0057 §amendment-via-parent)
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-06-26
+- **Origin:** (see calc source)
+- **Source (calc canonical):** [ADR-0049-amendment-subcheck-k](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0049-amendment-subcheck-k.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0049-amendment-subcheck-k.md` file does NOT exist (will not be created); amendment lineage trace via slug reference in this section.
+- **Sister-patterns:** ADR-0057 (§amendment-via-parent — fold pattern codification), ADR-0024 §Watchdog logic, ADR-0038 §WIP cap, ADR-0049 §d-test framework, ADR-0055 §1 Cadence Rule 1 atomic
+
+#### Amendment doctrine (extracted from calc canonical §Decision)
+
+(see calc source for full text)
+

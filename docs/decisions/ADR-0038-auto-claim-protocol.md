@@ -195,3 +195,88 @@ Sprint 4 EOD 2026-06-22T24:00Z — **only the architect scope fits Sprint 4**. D
 - Issue #267 (JSON-quote cmd_set — agent-watch.sh integration must apply this lesson)
 - Issue #221 (auto-ping dual-channel — same "informational vs directive" root cause class)
 - File ownership matrix (`.claude/` human-only, `scripts/` developer territory, `.github/workflows/` human-only)
+
+---
+
+## Amendment
+
+Folded amendments per **ADR-0057 §amendment-via-parent** (Path A v26 source-of-truth = calc-side standalone amendment file; tmpl-side = section in parent ADR).
+
+### Amendment ?: watcher enforcement (folded per ADR-0057 §amendment-via-parent)
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-06-30
+- **Origin:** (see calc source)
+- **Source (calc canonical):** [ADR-0038-amendment-watcher-enforcement](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0038-amendment-watcher-enforcement.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0038-amendment-watcher-enforcement.md` file does NOT exist (will not be created); amendment lineage trace via slug reference in this section.
+- **Sister-patterns:** ADR-0057 (§amendment-via-parent — fold pattern codification), ADR-0024 §Watchdog logic, ADR-0038 §WIP cap, ADR-0049 §d-test framework, ADR-0055 §1 Cadence Rule 1 atomic
+
+#### Amendment doctrine (extracted from calc canonical §Decision)
+
+**§Watcher Enforcement amendment**: codify (a) work-stream identification algorithm for watcher, (b) watcher aggregation contract, (c) decision rules, (d) d062 d-test contract.
+
+### §1 — Work-stream identification algorithm (watcher-side)
+
+A watcher observing work-streams MUST apply the **dual mechanism** (PRIMARY + SECONDARY) when no `stream:` label exists:
+
+```
+ALGORITHM: identify_work_streams(role)
+  INPUT: role ∈ {developer, architect, product-manager, tester, orchestrator}
+  OUTPUT: set of work-stream IDs (1 stream = 1 PR-cluster or 1 standalone issue)
+
+  1. PRIMARY — stream: label match
+     For each `status:in-progress` issue with `agent:<role>`:
+       IF issue has `stream:<stream-id>` label:
+         work_stream_id = stream:<stream-id>
+       ELSE: continue to step 2
+
+  2. SECONDARY — commit-base fallback (PR cluster)
+     Query PRs where branch HEAD is reachable from issue's last commit
+       (via `gh pr list --search "Closes #N in:body"` or commit-traversal):
+       IF issue is closed by a PR (Closes #N / Fixes #N in:body):
+         cluster_issues = all issues closed by same PR (grep body for Closes #X / Fixes #X)
+         work_stream_id = "pr:<min(cluster_issues)>"  (d
+
+*(Doctrine elided for brevity — see calc canonical source for full text)*
+
+### Amendment ?: workstream awareness (folded per ADR-0057 §amendment-via-parent)
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-06-30
+- **Origin:** (see calc source)
+- **Source (calc canonical):** [ADR-0038-amendment-workstream-awareness](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0038-amendment-workstream-awareness.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0038-amendment-workstream-awareness.md` file does NOT exist (will not be created); amendment lineage trace via slug reference in this section.
+- **Sister-patterns:** ADR-0057 (§amendment-via-parent — fold pattern codification), ADR-0024 §Watchdog logic, ADR-0038 §WIP cap, ADR-0049 §d-test framework, ADR-0055 §1 Cadence Rule 1 atomic
+
+#### Amendment doctrine (extracted from calc canonical §Decision)
+
+**Layer 2 amendment**: WIP counted by **WORK-STREAM**, not by issue count. A work-stream = a logical group of issues linked by PR-cluster relationship.
+
+### Work-stream definition
+
+A work-stream is:
+
+1. **PR cluster**: issues #N and #M are in the same work-stream if any PR has `Closes #N` AND `Closes #M` in its body
+2. **Standalone issue**: an `status:in-progress` issue with no PR closing it = 1 work-stream
+
+**WIP count** = number of distinct work-streams with at least one issue in `status:in-progress`.
+
+### Algorithm (Layer 2 impl, dev lane ~30 LOC)
+
+```bash
+# 1. List all status:in-progress issues for role
+in_progress=$(gh issue list --label "agent:${ROLE}" --label "status:in-progress" \
+  --state open --json number)
+
+# 2. For each issue, find PRs that close it (Closes #N / Fixes #N in:body)
+# Build work-stream graph: issue → PR-cluster-id (uses min issue# in cluster as id)
+
+declare -A issue_to_stream_id
+declare -A seen_streams
+
+for issue_num in $(echo "$in_progress" | jq -r '.[].number'); do
+  closing_prs=$(gh pr list --state all --search "Closes #$issue_num in:body" \
+    --json number,body --limit 5)
+  
+  if [ -z "$closing_prs" ] || [ "$(echo "$closing_prs" | jq 'length')" = "0
+
+*(Doctrine elided for brevity — see calc canonical source for full text)*
+
