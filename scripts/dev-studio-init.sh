@@ -457,11 +457,22 @@ render_one() {
     chmod +x "$dst"
   fi
 
-  # Remove the .tmpl source after successful render. Template-grade contract:
-  # rendered repos should contain ONLY final files — leftover .tmpl files are
-  # confusing for downstream consumers and break post-init smoke tests that
-  # assert "no .tmpl present". DRY_RUN skips this (we already returned above).
-  rm -f "$src"
+  # Remove the .tmpl source after successful render — but ONLY if it's not
+  # git-tracked. Template source repos (this repo) commit `.tmpl` files as
+  # source of truth and must survive init.sh to support soul-amend PRs;
+  # consumer projects (downstream clones) ship `.tmpl` files as ephemeral
+  # bootstrap inputs that should not leak into the rendered repo.
+  #
+  # Issue #201 — `git ls-files --error-unmatch` returns 0 for tracked files
+  # (source repo) and non-zero for untracked files (consumer). This restores
+  # the original "rendered repos contain only final files" contract for
+  # consumers while preserving `.tmpl` source in the template repo. See
+  # d-init-sh-tmpl-preservation.sh 7-TC regression guard (ADR-0049 ≥5 baseline).
+  if command -v git >/dev/null 2>&1 \
+     && git -C "${REPO_ROOT}" rev-parse --git-dir >/dev/null 2>&1 \
+     && ! git -C "${REPO_ROOT}" ls-files --error-unmatch -- "$src" >/dev/null 2>&1; then
+    rm -f "$src"
+  fi
 
   dbg "rendered: $src -> $dst (source removed)"
 }
