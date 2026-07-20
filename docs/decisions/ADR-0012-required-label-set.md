@@ -206,6 +206,75 @@ gh issue create \
   the agent should learn to set labels at birth; auto-fix hides the
   defect.
 
+---
+
+## Cascade-strip Part 2.5 — Lane-Transition Skip
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-06-30
+- **Origin:** Sprint 22 P2 doctrine hardening (RETRO-016 #6 cluster)
+- **Closes (calc-side):** Issue #706 (PR #705 LIVE INSTANCE — Layer 4 cascade-strip + Layer 5 TC4 reversal race stripping `status:ready` on tester APPROVED PRs)
+- **Source (calc canonical):** [AtilCalculator ADR-0063-amendment-layer-4-cascade-strip-lane-transition-skip.md](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0063-amendment-layer-4-cascade-strip-lane-transition-skip.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0063-*.md` file does NOT exist (will be removed from tmpl INDEX.md); amendment lineage trace via `ADR-0063` reference in this section.
+- **Sister-patterns:** ADR-0048 (Layer 5 status:ready auto-add), ADR-0048-amendment Layer 5 Label-Change Event Verdict-Gate (sibling amendment, also folded), ADR-0057 (amendment-via-parent), ADR-0056 (Layer 5 idempotency reconcile)
+
+### Part 2.5 decision
+
+Extend the existing Cascade-strip scope-tightening (Part 1, PR #426) by **adding a Lane-Transition Skip predicate**: Layer 4 cascade-strip MUST skip `unlabeled` events where the removed label name matches `cc:*` or `needs-*-signoff` (lane-transition events carry verdict semantics, NOT status-reset signals).
+
+### Part 2.5 LIVE INSTANCE (RETRO-016 #6 carrier)
+
+**PR #705** (2026-06-29, @tester APPROVED cmt 4836513798) — `status:ready` toggled add/remove twice within ~83s:
+
+| Time (Z) | Bot marker | Layer | Action |
+|----------|------------|-------|--------|
+| 19:58:21Z | (tester verdict) | — | PR Review APPROVED posted |
+| 19:58:36Z | `<!-- adr-0012-cascade-strip-tightening -->` | Layer 4 | Trigger: `unlabeled cc:tester`. Status labels observed: `status:in-review, status:ready`. Primary (oldest): `status:in-review`. **Removed: `status:ready`** as duplicate |
+| 19:58:38Z | `<!-- adr-0012-status-ready-gating -->` | Layer 5 | Trigger: `unlabeled needs-tester-signoff`. `status:ready` auto-added (per ADR-0048 §Type-driven) |
+| 19:59:45Z | `<!-- adr-0012-status-ready-gating-reversal -->` | Layer 5 TC4 reversal | Trigger: `undefined` event, action=`labeled`, label=`needs-tester-signoff`. **Removed: `status:ready`** ("tester re-rejected after APPROVED — needs-tester-signoff re-added" per bot log) |
+
+**Net pathology**: `status:ready` added then removed twice. Final state: no `status:*` label on PR (`type:feature + agent:developer + cc:human` only). **4-cat invariant visually broken** until owner manually re-adds `status:ready`.
+
+### Part 2.5 rationale
+
+The original Part 1 cascade-strip fires on the `unlabeled` event regardless of what was unlabeled. When the removed label is `cc:tester` or `needs-tester-signoff` (a **lane-transition event** signaling tester verdict posted), Part 1 interprets a verdict lane transfer as a duplicate-status trigger — semantically wrong.
+
+### Part 2.5 implementation diff
+
+In the §Enforcement section above, add a `if:`-clause filter on the `unlabeled` event handler:
+
+```yaml
+# Original Cascade-Strip Part 1 (unconditional strip on duplicate status:*):
+on:
+  issues:
+    types: [unlabeled]
+
+# Part 2.5 (lane-transition skip):
+on:
+  issues:
+    types: [unlabeled]
+# Excluded: label.name NOT in (cc:*, needs-*-signoff)
+# Equivalent: `if: "!startsWith(github.event.label.name, 'cc:') && !startsWith(github.event.label.name, 'needs-') && matches(github.event.label.name, '^status:')"`
+```
+
+### Part 2.5 acceptance criteria
+
+- AC1: Layer 4 cascade-strip MUST skip when `github.event.label.name` matches `cc:*` or `needs-*-signoff`
+- AC2: Layer 5 status:ready auto-add (per ADR-0048) remains in effect for label-change path — only the cascade-strip side skips
+- AC3: d-test `d164-s32-027-b-deferred.sh` TC3 verifies this section exists + references `ADR-0063` for lineage
+
+### Part 2.5 references
+
+- Issue #706 (RETRO-016 #6 origin)
+- PR #705 (LIVE INSTANCE)
+- PR #426 (Layer 4 cascade-strip yaml, sister-pattern Part 1)
+- ADR-0063 (calc canonical amendment file — folded here, NOT ported as standalone tmpl file)
+- ADR-0048 (companion Layer 5 auto-add, also has amendment folded)
+- ADR-0048-amendment Layer 5 Label-Change Event Verdict-Gate (sibling amendment — DO NOT both `status:ready` re-add AND `status:ready` cascade-strip in same cycle, see ADR-0056)
+- ADR-0057 (§amendment-via-parent — fold pattern codification)
+- RETRO-016 #6 (Issue #706, origin carrier)
+
+---
+
 ## Future work
 
 - Add `priority:*` to the required-set (currently optional). Likely
