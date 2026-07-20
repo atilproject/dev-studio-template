@@ -506,3 +506,19 @@ CHANGELOG v0.4.0 bump (AC4).
   of STORY-004). Happy-path + case-preservation pair satisfies AC5.
 - `README.md` — Sprint 1 repo layout + 4-step "Getting started" (Install
   uv → `make install` → `make run` → `curl /healthz`).
+- **agent-wake.sh Fix 4b forward-port — Issue #178 (S32-021 sister AC2 d-test enabler).**
+  Byte-equal forward-port from `AtilCalculator/scripts/agent-wake.sh` per Issue #1041 non-vacuous.
+  165 LOC, 7921 bytes. Adds Fix 4b (Issue #1138 / ADR-0066): D1
+  `WAKE_VERIFY_TIMEOUT_SEC` env override (default 3s, was hardcoded 1s), D2 16-char literal
+  sentinel `🔔 INBOX (dual-c` replacing Fix 3 dynamic `MSG_PREFIX` derivation
+  (render-drift-immune vs 80-char prefix truncation at tmux wrap boundaries), D3 hierarchical
+  exit codes (Tier 1 rc=0 happy-path PRESERVED + Tier 2 rc=0+WARN lenient verify-uncertain +
+  Tier 3 rc=1+ERROR hard-fail preserved), D4 WARN vs ERROR log discrimination
+  (owner-greppable audit). Post-port `bash scripts/tests/d1138-template-agent-wake-fix-4b.sh
+  --self-test`: **13/13 GREEN** (was 0/8 RED pre-port — non-vacuous per Issue #1041).
+  Sister-patterns: d1138-template-agent-wake-fix-4b.sh (tmpl forward-port parity d-test),
+  d068b (WAKE_KEYS_GAP_SEC env-override naming convention sister to D1), d-pr-1147-install-test-flake
+  (Issue #176 sister-cluster Wave 9 forward-port). Cadence Rule 1 atomic per ADR-0055 §1:
+  agent-wake.sh byte-equal + INDEX.md row + this CHANGELOG entry in same commit cluster
+  (3 files). PR body anchor: `Closes atilproject/dev-studio-template#178`. Cycle ~#3958Q+135
+  owner-directive Wave 9 claim order.
