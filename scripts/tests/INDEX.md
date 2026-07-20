@@ -561,3 +561,17 @@
 | **Cadence Rule 1 atomic** (ADR-0055 §1) | Same commit cluster as `d108-tasklist-snapshot-write-through.sh` row above (13 files per Cadence Rule 1) |
 | **Cross-references** | Issue #191 (S32-XXX-B tracker); ADR-0072 §Layer 1 (Watchdog tuning revision — saturation threshold table rationale); ADR-0073 (tmpl canonical sister); PR #1168 + PR #190 (ADR source PRs MERGED); PR #1172 (calc e2e sister). **Doctrinal anchors**: Issue #414 §1 (pre-PR re-query), ADR-0044 (RED-first TDD), ADR-0049 (d-test ≥5 TCs baseline + ≥3 sister-pattern), ADR-0055 §1 (Cadence Rule 1 atomic), ADR-0059 (cluster-squash sister with calc#1169) |
 
+## d164 — S32-027 Cadence-Rule-2-B DEFERRED ADR renumber/port batch ✅ ACTIVE
+
+| Field | Value |
+|---|---|
+| **Story** | [Issue #164](https://github.com/atilproject/dev-studio-template/issues/164) — `S32-027-cadence-rule-2-B: 7 DEFERRED ADR renumberings (calc→tmpl gap-closing follow-up)` |
+| **Source-of-truth sister** | `AtilCalculator/docs/decisions/PORT-DECISIONS.md` §(B) DEFERRED classification table — the port-decision record of the 7 number-collision ADRs |
+| **Test file** | `scripts/tests/d164-s32-027-cadence-rule-2-b-defer-renumber.sh` |
+| **Production files** | `docs/decisions/ADR-0061-ac-mapping-verification-doctrine.md` (calc ADR-0060 renumber-on-port); `docs/decisions/ADR-0062-layer5-label-change-verdict.md`, `ADR-0063-layer4-cascade-strip-skip.md`, `ADR-0064-cross-user-env-var.md`, `ADR-0065-cpython-asyncio-fix.md` (clean ports into reserved sister slots); `docs/decisions/INDEX.md` (RESERVED→Accepted for 0059,0061-0065 + broken-link fix for 0059); `docs/decisions/PORT-DECISIONS.md` (§B rows → ✅ RESOLVED) |
+| **TCs** | **6 TCs (RED-first per ADR-0044 ≥5 baseline):** TC1 5 ported/renumbered ADR files exist; TC2 no RESERVED placeholder rows remain for 0059,0061-0065; TC3 INDEX link integrity (orphan-link guard, calc-PR-#1178 defect class); TC4 ADR-0061 renumber integrity + tmpl ADR-0060 agent-flag collision-free; TC5 PORT-DECISIONS §(B) fully resolved (no `**DEFERRED**`); TC6 Cadence Rule 1 atomic — INDEX.md references this test (ADR-0055 §1) |
+| **Sister-pattern** | `d156-s32-027-adr-port-batch.sh` (S32-027 parent port batch — DIRECT sister); `d983-s28-003-forward-port-parity.sh` (forward-port parity); `d1138-template-agent-wake-fix-4b.sh` (tmpl ADR-port d-test sister); ≥3 sister-pattern coverage per ADR-0049 §Sister-pattern met (d156 + d983 + d1138 = 3 members) |
+| **Run** | `bash scripts/tests/d164-s32-027-cadence-rule-2-b-defer-renumber.sh` |
+| **Cadence Rule 1 atomic** (ADR-0055 §1) | Single-commit cluster: 5 ADR ports + INDEX.md + PORT-DECISIONS.md + `d164-...sh` (new) + this INDEX entry |
+| **Cross-references** | Issue #164 (S32-027-B tracker); Issue #156 + PR #163 (S32-027 parent ADR-port batch, MERGED); AtilCalculator PR #1178 (calc ADR-0061 agent-flag REMOVE — the NO-PORT no-op counterpart). **Doctrinal anchors**: Issue #414 §1 (pre-PR re-query), Issue #972 (Path-Verify — caught 0072/0073 slot-drift), ADR-0044 (RED-first TDD), ADR-0049 (d-test ≥5 TCs baseline + ≥3 sister-pattern), ADR-0055 §1 (Cadence Rule 1 atomic), ADR-0057 (Closes anchor strict), ADR-0059 (cluster-squash eligible) |
+
