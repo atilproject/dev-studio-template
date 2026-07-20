@@ -6,6 +6,24 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- **d-s32-024-new-project-bootstrap-dry-run.sh — S32-024 (Issue #162) Phase A d-test.**
+  End-to-end new-project bootstrap verifier per S32-024 (Issue #162) AC1+AC2+AC3
+  d-testable subset. 8 TCs (TC0 preflight + TC1 launcher existence + TC2 source-mode
+  4-tuple + TC3 fixture hook + TC4 AC1 live invocation + TC5 AC2 post-state + TC6
+  trust-but-verify content blob SHA + TC7 AC3 dev-studio-start.sh 5-agent check).
+  Sister-patterns: d-smoke-bootstrap-v110 (REST + content blob SHA v3 amendment per
+  cycle ~#3940Q+9) + e2e-pilot.sh (T1-T7 new-project bootstrap) + d-verify-portage-
+  diff-engine (TRAP cleanup + bash -n) + d001-launcher-self-hosted-runner-patch
+  (S29-013 sourced-mode + FIXTURE_*). RED state: 4/8 PASS (TC0-TC3 unit-level) +
+  4/8 FAIL (TC4-TC7 integration-level until AC1 invocation lands). Cadence Rule 1
+  atomic per ADR-0055 §1: d-test + scripts/tests/INDEX.md row + this CHANGELOG.md
+  entry in same commit. Cycle ~#3958Q+5 — authored per Issue #414 §1 pre-flight
+  ground truth (Layer 2 REST + Issue #162 body capture) + Issue #389 dual-channel
+  peer-poke reserved (tester-wake on PR open, not pre-RED-state). PR body anchor:
+  `Closes atilproject/dev-studio-template#162`.
+
 ### Fixed
 
 - **d-smoke-bootstrap-v110 TC4+TC5 amendment (cycle ~#3940Q+9, Phase B d-test self-heal).**
