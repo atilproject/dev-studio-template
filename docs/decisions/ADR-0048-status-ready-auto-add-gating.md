@@ -232,6 +232,72 @@ Workflow yaml Layer 5 silent-skip reason text fix is owner-gated per file owners
 
 ---
 
+## Amendment: Layer 5 Label-Change Event Verdict-Gate Extension
+
+- **Status:** Proposed (amendment — folded into this ADR per ADR-0057 §amendment-via-parent; canonical home = this section)
+- **Date:** 2026-06-30
+- **Origin:** Sprint 22 P2 doctrine hardening (RETRO-016 #5 cluster)
+- **Closes (calc-side):** Issue #696 (PR #695 LIVE INSTANCE — `status:ready` false-positive on 🔴 verdict)
+- **Source (calc canonical):** [AtilCalculator ADR-0062-amendment-layer-5-label-change-verdict-gate.md](https://github.com/atilcan65/AtilCalculator/blob/main/docs/decisions/ADR-0062-amendment-layer-5-label-change-verdict-gate.md) — folded into this section on tmpl per ADR-0057 §amendment-via-parent pattern. NOTE: tmpl standalone `ADR-0062-*.md` file does NOT exist (will be removed from tmpl INDEX.md); amendment lineage trace via `ADR-0062` reference in this section.
+- **Sister-patterns:** ADR-0057 (amendment-via-parent), ADR-0056 (Layer 5 idempotency reconcile, WARN-not-FAIL proven), ADR-0012 (cascade-strip Part 1 + Part 2 + Part 2.5 sibling amendment)
+
+### Amendment decision
+
+Extend Path A's verdict-emoji check (in §Implementation above) from `pull_request_target` events at `opened`/`reopened` action to **all `cc:<peer>` and `needs-*-signoff` label-change events** (`labeled` action on label name matching the patterns).
+
+### Triggering LIVE INSTANCE (RETRO-016 #5 carrier)
+
+**PR #695** (2026-06-29, tester triage cmt 4835036231):
+- 16:52:18Z — PR-creation path: Layer 5 Path A verdict-emoji gate correctly REFUSED (no `status:ready`)
+- 16:56:42Z — Label-change path: tester delivered 🔴 CHANGES REQUESTED verdict; tester flipped labels per tester.md table: `--remove-label needs-tester-signoff --remove-label cc:tester --add-label cc:developer`
+- 16:56:52Z — Layer 5 saw: `needs-tester-signoff` absent + `cc:developer` present → "reviewer chain complete" → auto-ADDED `status:ready` (**FALSE POSITIVE** — verdict was 🔴)
+- 16:57:14Z — Dev manually re-ADDED `status:in-review`
+- 16:57:23Z — Layer 5 cascade-strip removed `status:ready` (correct outcome, wrong reason — should have been verdict-emoji check, not cascade-strip)
+
+**Net pathology**: `status:ready` was added on a 🔴 verdict PR, signaling "ready for owner merge gate" when in reality the reviewer was asking for changes. Owner could have merged broken code.
+
+### Amendment rationale
+
+The original Path A binding (PR-creation events only) closed the PR #655 + #657 pathology but left label-change events unguarded. A 🔴 verdict followed by an atomic label flip (`needs-tester-signoff` remove + `cc:developer` add) is **functionally a `pull_request_target` event** semantically — Layer 5 SHOULD treat it identically.
+
+### Amendment implementation diff
+
+In the §Implementation `if:` clause, add an `issues` event binding (PR-creation path remains as-is):
+
+```yaml
+# Original (PR-creation only):
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+
+# Amendment (PR-creation + label-change):
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize]
+  issues:
+    types: [labeled]
+```
+
+Filter to `cc:*` or `needs-*-signoff` label events via the same verdict-emoji gate (path gate + label name regex). WARN-not-FAIL maintained per ADR-0056.
+
+### Amendment acceptance criteria
+
+- AC1: Layer 5 reads verdict emoji from PR `comments[]` on `issues` event when label matches `cc:*` or `needs-*-signoff`
+- AC2: If verdict 🔴 on label-change path, Layer 5 does NOT auto-add `status:ready` (cascade-strip path remains as fallback)
+- AC3: d-test `d164-s32-027-b-deferred.sh` TC2 verifies this section exists + references `ADR-0062` for lineage
+
+### Amendment references
+
+- Issue #696 (RETRO-016 #5 origin)
+- PR #695 (LIVE INSTANCE)
+- ADR-0062 (calc canonical amendment file — folded here, NOT ported as standalone tmpl file)
+- ADR-0057 (§amendment-via-parent — fold pattern codification)
+- ADR-0056 (Layer 5 idempotency reconcile, WARN-not-FAIL proven)
+- ADR-0012 (cascade-strip Part 1 + Part 2; sibling amendment Part 2.5 also folded)
+- RETRO-016 #5 (Issue #696, origin carrier)
+
+---
+
 ## See also
 
 - **ADR-0046** (Sprint 9 P1, PR #409 in-review) — Load-Bearing ADR §Implementation Guide Pattern. Sister to this ADR; provides §A literal jq filter, §B ownership-split decision tree, §C companion-ADR template. Cited because this ADR is load-bearing (codifies type-driven table that determines auto-add logic).
