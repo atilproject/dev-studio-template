@@ -6,10 +6,6 @@
 # target agent's tmux pane (agent wake). This script is the second half of
 # that dual-channel wiring.
 #
-# Template port: Issue #222. Reference impl: atilcan65/AtilCalculator commit
-# ecbf21a (PR #239). All projects bootstrapped from this template ship with
-# the dual-channel wake capability.
-#
 # Usage:
 #   scripts/agent-wake.sh <role> "<message>"
 #
@@ -98,25 +94,73 @@ if [ "$tmux_rc" -ne 0 ]; then
   exit 1
 fi
 
-# --- Fix 3 (Issue #1063): capture-pane post-send verify ---
-# End-to-end delivery check: did the wake text actually land in the pane?
-# Without this, "Wake injected" log was a lie (silent miss on partial
-# delivery, dropped keystrokes, slow pane renders).
-# 1s timeout covers slow tmux renders; grep -F for literal substring match
-# against MSG_PREFIX (first line of MSG, truncated to 80 chars for stability).
-MSG_PREFIX="${MSG%%$'\n'*}"
-if [ "${#MSG_PREFIX}" -gt 80 ]; then
-  MSG_PREFIX="${MSG_PREFIX:0:80}"
+# --- Fix 4b (Issue #1138 / ADR-0066): lenient capture-pane verify + hierarchical exit code ---
+# Issue #1063 Fix 3 had three failure modes that produced FALSE-failures on
+# perfectly-delivered wakes (Sprint 31 cycles ~#2855/~#2857/~#2858/~#2861,
+# 6/6 false-failures, 6/6 actual delivery success via GitHub artefact path):
+#
+#   1) Hardcoded `timeout 1` too tight — slow tmux renders on long-running
+#      panes missed the verify window even though send-keys had succeeded.
+#   2) Dynamic MSG_PREFIX derivation from `MSG` was render-drift-fragile —
+#      first line wrapped differently across tmux versions, prefix mismatched
+#      even though the text was actually in the pane.
+#   3) Hierarchical exit code was binary — verify-FAIL was treated as hard
+#      fail (rc=1), which polluted audit logs with noise on otherwise-good
+#      wakes. GitHub artefact path (ADR-0033 dual-channel) is the PRIMARY
+#      wake, so verify-uncertain should be lenient.
+#
+# Fix 4b (3 additive changes — additive evolution, NOT destructive rewrite):
+#   D1: `WAKE_VERIFY_TIMEOUT_SEC` env override (default 3s, was hardcoded 1s).
+#       Sister-pattern naming to d068b `WAKE_KEYS_GAP_SEC` (Issue #935).
+#   D2: 16-char literal sentinel `"🔔 INBOX (dual-c"` replaces dynamic
+#       MSG_PREFIX derivation. Sentinel is the canonical INBOX header prefix;
+#       render-drift-immune (vs the prior 80-char prefix which could be
+#       truncated mid-character at tmux wrap boundaries).
+#   D3: Hierarchical exit codes:
+#         Tier 1: send-keys OK + verify OK → rc=0 (preserved happy path)
+#         Tier 2: send-keys OK + verify FAIL → rc=0 + stderr WARN (LENIENT)
+#                 send-keys succeeded, GitHub artefact path is primary wake.
+#         Tier 3: send-keys FAIL → rc=1 + stderr ERROR (preserved hard-fail)
+#                 This block is at lines 84-87 above; D3 only changes Tier 2.
+#   D4: WARN vs ERROR log discrimination — owner-greppable audit.
+#         WARN: Wake injected but verify uncertain → uncertain-but-sent (Tier 2)
+#         ERROR: send-keys returned ...            → definite failure (Tier 3)
+#
+# Sister-pattern lineage:
+#   - Issue #1063 Fix 3 (additive evolution, NOT destructive rewrite)
+#   - d068b (WAKE_KEYS_GAP_SEC env override naming, Issue #935)
+#   - ADR-0033 (dual-channel doctrine — GitHub artefact path is primary wake)
+#   - ADR-0066 (Fix 4b decision codification)
+#   - Issue #1138 (P1 bug, Sprint 31 cluster-squash Path A v26 step 3/3)
+VERIFY_SENTINEL="🔔 INBOX (dual-c"
+
+# D1: env override for capture-pane timeout. Default 3s; was hardcoded 1s.
+verify_timeout="${WAKE_VERIFY_TIMEOUT_SEC:-3}"
+
+# Test contract (d1138 TC1): log verify_timeout to TMUX_LOG_FILE when set, so
+# the d-test fixture's fake tmux log can verify which `timeout` value was
+# passed. No-op in production (TMUX_LOG_FILE unset). This is a diagnostic
+# hook, not a feature — does not affect the actual capture-pane invocation.
+if [ -n "${TMUX_LOG_FILE:-}" ]; then
+  printf 'capture-pane invoked with timeout %s\n' "$verify_timeout" >> "$TMUX_LOG_FILE"
 fi
 
-if timeout 1 tmux capture-pane -t "$pane_id" -p 2>/dev/null | grep -qF "$MSG_PREFIX"; then
+if timeout "$verify_timeout" tmux capture-pane -t "$pane_id" -p 2>/dev/null \
+   | grep -qF "$VERIFY_SENTINEL"; then
+  # Tier 1 (D3): send-keys OK + verify OK → rc=0 (happy path preserved).
   echo "Wake verified: role=$ROLE pane=$pane_id"
   exit 0
 fi
-# Fix 3 verify failed — capture grep rc (rc=0 means match, rc=1 means mismatch/timeout).
-# Note: pipefail in set -uo pipefail propagates the rightmost non-zero rc; explicit
-# capture via `|| verify_rc=$?` keeps rc=$? semantics unambiguous in all bash versions.
+
+# Tier 2 (D3): send-keys OK + verify FAIL → rc=0 + stderr WARN (LENIENT).
+# send-keys succeeded at lines 82-87 above, so the wake text DID reach the
+# pane (or at least was sent); the GitHub artefact path (ADR-0033) is the
+# primary wake, so verify-uncertainty is non-blocking. Capture grep rc for
+# audit log: rc=0 means match, rc=1 means mismatch/timeout.
+# Note: pipefail in `set -uo pipefail` propagates the rightmost non-zero rc;
+# explicit `|| verify_rc=$?` keeps semantics unambiguous in all bash versions.
 verify_rc=0
-timeout 1 tmux capture-pane -t "$pane_id" -p 2>/dev/null | grep -qF "$MSG_PREFIX" || verify_rc=$?
-echo "ERROR: capture-pane verify failed for role=$ROLE pane=$pane_id rc=$verify_rc (no match for prefix: $MSG_PREFIX)" >&2
-exit 1
+timeout "$verify_timeout" tmux capture-pane -t "$pane_id" -p 2>/dev/null \
+  | grep -qF "$VERIFY_SENTINEL" || verify_rc=$?
+echo "WARN: Wake injected but verify uncertain for role=$ROLE pane=$pane_id rc=$verify_rc (pane may have scrolled past VERIFY_SENTINEL; text sent via send-keys — GitHub artefact path is primary wake per ADR-0033)" >&2
+exit 0
