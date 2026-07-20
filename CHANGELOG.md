@@ -8,6 +8,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **d-pr-1147-install-test-flake.sh — Issue #176 forward-port (S32-021 sister AC4 gap closure).**
+  Byte-equal port from `AtilCalculator/scripts/tests/d-pr-1147-install-test-flake.sh` per
+  Issue #1041 non-vacuous. 4 TCs (RED-first per ADR-0044 ≥3 hygiene baseline met; AC2 ≥5
+  aspirational — source-of-truth sister has 4 TCs): TC1 timeout=180 venv-creation relaxation,
+  TC2 session-scoped shared_venv fixture, TC3 test_install_command_executes wired to
+  shared_venv parameter, TC4 pytest local regression guard. Sister-patterns: d058 (claim
+  work-stream awareness — same bash+grep verifier idiom), d1142 (queue hygiene 4-cycle
+  threshold — same d-test size class), d1138-template-agent-wake-fix-4b (Issue #1140
+  forward-port parity precedent). Pre-impl RED 0/4 PASS + 4/4 FAIL (tests/docs/test_readme.py
+  absent in tmpl). Cadence Rule 1 atomic per ADR-0055 §1: d-test + INDEX.md row + this
+  CHANGELOG entry in same commit cluster. Closes Issue #176 + Closes Issue #161 AC4
+  gap. Cycle ~#3958Q+135 — owner-directive Wave 9 claim order (#1180 → #176 first).
 - **S32-024 Phase B summary doc — Issue #197 AC1-AC6 evidence.** Documents the
   Sprint 32 dry-run execution (`atilcan65/sprint-32-dryrun` PR #3 squash-merged
   sha `e5c2ff07`). Covers AC1 launcher invocation, AC2 post-state (43 labels
