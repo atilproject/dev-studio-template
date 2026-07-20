@@ -8,6 +8,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **S32-024 Phase B summary doc — Issue #197 AC1-AC6 evidence.** Documents the
+  Sprint 32 dry-run execution (`atilcan65/sprint-32-dryrun` PR #3 squash-merged
+  sha `e5c2ff07`). Covers AC1 launcher invocation, AC2 post-state (43 labels
+  ≥34 threshold), AC3 5-agent tmux session, AC4 PM claim path (Vision Intake
+  #1 + first story #2), AC5 in-dry-run merge (15/15 pytest pass), AC6
+  close-the-loop. Dry-run caveats noted (cross-lane verdicts self-applied,
+  owner squash simulated, TC7 static grep overly strict — sister-pattern to
+  cycle ~#3950Q d-test wrong-expectation RED). Cadence Rule 1 atomic per
+  ADR-0055 §1: this doc + CHANGELOG entry + dry-run evidence all in same commit.
+  Cycle ~#3958Q+118 — authored post-Issue #162 premature-close (cycle ~#2919
+  anti-pattern sister) and PR #196 squash-merge terminal. PR body anchor:
+  `Closes atilproject/dev-studio-template#197`.
 - **d-s32-024-new-project-bootstrap-dry-run.sh — S32-024 (Issue #162) Phase A d-test.**
   End-to-end new-project bootstrap verifier per S32-024 (Issue #162) AC1+AC2+AC3
   d-testable subset. 8 TCs (TC0 preflight + TC1 launcher existence + TC2 source-mode
