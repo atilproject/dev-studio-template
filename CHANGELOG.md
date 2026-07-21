@@ -8,6 +8,25 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ### Added
 
+- **Issue #201 fix — `scripts/dev-studio-init.sh` .tmpl preservation guard.** P1 owner-filed
+  bug (2026-07-20T17:53:17Z): `render_one()` unconditionally `rm -f "$src"` after sed render,
+  destroying tracked `.tmpl` source files when init.sh is run in the template source repo.
+  Fix gates the rm with `git ls-files --error-unmatch` check: tracked files (.tmpl in source
+  repo, committed source-of-truth) are preserved; untracked files (.tmpl in consumer projects,
+  ephemeral bootstrap inputs) are still deleted as before. Restores the soul-amend PR cycle
+  (`.claude/agents/*.md.tmpl` + `CLAUDE.md.tmpl`) without manual `git checkout HEAD -- .tmpl`
+  workaround (Issue #1188 Carry-over #7 precedent). Paired with new d-test
+  `d-init-sh-tmpl-preservation.sh` (7 TCs — exceeds ≥5 aspirational baseline per ADR-0049):
+  TC1-TC6 each tracked `.tmpl` file (architect/developer/orchestrator/product-manager/tester
+  soul .tmpl + CLAUDE.md.tmpl) preserved after render_one; TC7 regression guard — untracked
+  .tmpl IS still deleted (consumer behavior preserved). RED-first per ADR-0044: pre-fix
+  1/7 PASS + 6/7 FAIL (bug reproduced), post-fix 7/7 GREEN verified locally. Cadence Rule 1
+  atomic per ADR-0055 §1: impl (init.sh) + d-test + INDEX.md row + this CHANGELOG entry
+  in single commit cluster (4 files). Closes Issue #201 sister-pattern: Issue #1023 /
+  RETRO-022 (reflex-class damage — tool's "helper" pass destroys user state). Cycle
+  ~#3966Q+5 sighting + cycle ~#3966Q+6 arch 9-Lens pre-claim advisory NIT 1-4 (AC1 .md
+  UNTRACKED note + d-test naming + AC7 root-cause-confirm + idempotency — all 4 NITs
+  absorbed).
 - **d-pr-1147-install-test-flake.sh — Issue #176 forward-port (S32-021 sister AC4 gap closure).**
   Byte-equal port from `AtilCalculator/scripts/tests/d-pr-1147-install-test-flake.sh` per
   Issue #1041 non-vacuous. 4 TCs (RED-first per ADR-0044 ≥3 hygiene baseline met; AC2 ≥5
