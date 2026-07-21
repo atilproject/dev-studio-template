@@ -66,6 +66,30 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   ground truth (Layer 2 REST + Issue #162 body capture) + Issue #389 dual-channel
   peer-poke reserved (tester-wake on PR open, not pre-RED-state). PR body anchor:
   `Closes atilproject/dev-studio-template#162`.
+- **Issue #179 forward-port — `scripts/agent-watch.sh` queue check filters (d028 P1) from
+  AtilCalculator.** Sister-pattern of AtilCalculator d028 + Issue #1142 + PR #1144 cluster
+  (cycle ~#1142 — `agent-watch.sh` queue filter bug fixed in AtilCalculator, requires tmpl
+  parity). Byte-equal forward-port (sha256 `b8c6d03662e7…` matches AtilCalculator source-
+  of-truth) covers D2.2 `role_wakes_for_pr_labeled` wake-trigger filter + accumulated sister-
+  pattern fixes (d1041 org-scan default, d1042 REPOS[] guard, d1043 MODE-detection fix,
+  Issue #1086 Bug A + Bug B, owner directive 2026-07-15T06:42Z `atilproject` org-scan default).
+  Paired with new d-test `d028-template-agent-watch-queue-check-filter.sh` (11 TCs — exceeds
+  ≥5 aspirational baseline per ADR-0049): TC1 cc-only filter wakes (tester); TC2 agent-only
+  filter wakes; TC3 both cc+agent filter wakes; TC4 neither filter skips; TC5 empty-queue
+  case skips; TC6 needs-tester-signoff wakes (3rd in ADR-0009 § 2.1 matrix); TC7 architect
+  cc-only wakes (cross-role verification); TC8 architect neither skips; TC9 byte-equal
+  parity (sha256 vs AtilCalculator source); TC10 sister-pattern cite count (≥3 per ADR-0049);
+  TC11 AC2 case anchors (cc-only / agent-only / both / neither / empty-queue ≥5 references).
+  Pattern: awk-extract `role_wakes_for_pr_labeled()` from agent-watch.sh + ROLE-prefixed
+  bash -c subshell eval (sister-pattern to d1138 + d-init-sh-tmpl-preservation). RED-first
+  per ADR-0044 + Issue #1041 (real `role_wakes_for_pr_labeled` invocation, NOT silent-green):
+  pre-port would have all 5 wake-cases failing (function absent) + byte-equal TC failing
+  (different sha); post-port 11/11 GREEN verified locally. Cadence Rule 1 atomic per
+  ADR-0055 §1: impl (agent-watch.sh) + d-test + INDEX.md row + this CHANGELOG entry in
+  single commit cluster (4 files). PR body anchor: `Closes atilproject/dev-studio-template#179`.
+  Sister-pattern: AtilCalculator Issue #1142 (origin) + PR #1144 (AtilCalc sister impl) +
+  cycle ~#2988 (forward-port cadence — byte-equal + INDEX.md). Cycle ~#3958Q+135 Wave 9
+  owner-directive claim order (#1180 → #176 → #178 → #179 → #180).
 
 ### Fixed
 
