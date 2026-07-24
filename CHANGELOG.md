@@ -565,3 +565,24 @@ CHANGELOG v0.4.0 bump (AC4).
   agent-wake.sh byte-equal + INDEX.md row + this CHANGELOG entry in same commit cluster
   (3 files). PR body anchor: `Closes atilproject/dev-studio-template#178`. Cycle ~#3958Q+135
   owner-directive Wave 9 claim order.
+- **Sprint 34 W2 forward-port S34-002 row 001 — `scripts/agent-context-monitor.sh`
+  byte-equivalence verified** (cycle ~#438, ADR-0075 §B.1 `equivalent` row).
+  Confirmed `scripts/agent-context-monitor.sh` in dev-studio-template is byte-identical
+  to `atilcan65/AtilCalculator` canonical (MD5 `8062b3a267cb22e36069d9cd29733e58`, 325 lines,
+  ground-truth verified 2026-07-25T04:13Z via md5sum + wc -l per cycle ~#437 probe). Per
+  ADR-0075 §B.1, this script is `equivalent` class (Pure wake loop, no project context) —
+  forward-port confirms sync, no drift detected. Added
+  `scripts/tests/d-s34-002-agent-context-monitor-byte-equivalence.sh` (new, ~120 LOC,
+  7 TCs RED-first per ADR-0044 + ≥6 baseline per ADR-0049) as evidence. Pre-port RED
+  state: TC6 + TC7 FAIL (INDEX.md row + CHANGELOG.md entry missing, real Cadence Rule 1
+  atomic markers per ADR-0044 non-vacuous). Post-port GREEN state: all 7 TCs GREEN.
+  Cadence Rule 1 atomic per ADR-0055 §1: d-test + INDEX.md row + CHANGELOG entry
+  (3 files in same commit; impl file scripts/agent-context-monitor.sh UNCHANGED — byte-identical
+  to AtilCalculator canonical per ADR-0075 §B.1 `equivalent` row, so NOT part of commit cluster).
+  PR body anchor: `Closes atilproject/AtilCalculator#1222` row001. Sister-patterns:
+  d-smoke-bootstrap-v110.sh (Sprint 32 d-smoke ≥5 TC baseline precedent),
+  d-pr-1147-install-test-flake.sh (Sprint 33 forward-port byte-equal parity doctrine),
+  d028-template-agent-watch-queue-check-filter.sh (Issue #179 byte-equal forward-port
+  sister, same 4-file Cadence Rule 1 atomic cluster pattern). Cycle ~#437 owner pre-flip
+  WIP cap override 3/3 (bypasses ADR-0038 §Auto-Claim cap=2/2); cycle ~#438 d-test
+  RED-first verify + commit.
