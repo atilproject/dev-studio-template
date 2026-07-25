@@ -611,3 +611,27 @@ CHANGELOG v0.4.0 bump (AC4).
   override per cycle ~#3968Q+313 newer-directive-wins); cycle ~#494 arch squash-verify
   ACK + dev lane cleared for row 002+ per RETRO-024 sister-pattern; cycle ~#495
   worktree setup + d-test RED-first verify.
+- **Sprint 34 W2 forward-port S34-002 row 003 — `scripts/agent-doctor.sh`
+  byte-equivalence verified** (cycle ~#500, ADR-0075 §B.1 `equivalent` row).
+  Confirmed `scripts/agent-doctor.sh` in dev-studio-template is byte-identical
+  to `atilcan65/AtilCalculator` canonical (MD5 `936b4608634acb53a2cca2567acee09e`,
+  566 lines, ground-truth verified 2026-07-25T07:59Z via md5sum + wc -l per cycle ~#500
+  probe). Per ADR-0075 §B.1, this script is `equivalent` class (Generic health check,
+  no project context — system role/probe/alert aggregator) — forward-port confirms
+  sync, no drift detected. Added `scripts/tests/d-s34-002-agent-doctor-byte-equivalence.sh`
+  (new, ~140 LOC, 7 TCs RED-first per ADR-0044 + ≥6 baseline per ADR-0049) as evidence.
+  Pre-port RED state: TC1-TC7 FAIL (file missing + INDEX.md row + CHANGELOG.md
+  entry missing, real Cadence Rule 1 atomic markers per ADR-0044 non-vacuous).
+  Post-port GREEN state: all 7 TCs GREEN. Cadence Rule 1 atomic per ADR-0055 §1:
+  d-test + INDEX.md row + CHANGELOG entry (3 files in same commit; impl file
+  scripts/agent-doctor.sh UNCHANGED — byte-identical to AtilCalculator canonical
+  per ADR-0075 §B.1 `equivalent` row, so NOT part of commit cluster). PR body
+  anchor: `Refs atilproject/AtilCalculator#1222` row003. Sister-patterns:
+  d-s34-002-atomic-write-byte-equivalence.sh (DIRECT sister — row 002 same cycle,
+  same byte-equivalence pattern, same Cadence Rule 1 atomic 3-files cluster),
+  d-s34-002-agent-context-monitor-byte-equivalence.sh (row 001 sister — same
+  byte-equivalence pattern), d-smoke-bootstrap-v110.sh (Sprint 32 d-smoke ≥5 TC
+  baseline precedent). Cycle ~#499 PR #205 SQUASH-MERGE TERMINAL + WIP cap 0/2
+  cleared; cycle ~#500 orchestrator+arch dual-channel dispatch (S34-002 row 003+
+  per cycle ~#3968Q+313 NEW DOCTRINE scope authority — template continuation,
+  S34-003 launcher PARKED).
