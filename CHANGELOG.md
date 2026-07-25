@@ -703,3 +703,31 @@ CHANGELOG v0.4.0 bump (AC4).
   PR #207 SQUASH-MERGE TERMINAL + 4/4 SHIPPED + WIP cap 0/2 cleared; cycle ~#534
   orchestrator dispatch (S34-002 row 005 + row 006 template continue per cycle ~#3968Q+313
   owner directive 2 PR ship then ACK pattern).
+- **Sprint 34 W2 forward-port S34-002 row 007 — `scripts/apply-reprime-protocol.py`
+  byte-equivalence verified** (cycle ~#549, ADR-0075 §B.1 `equivalent` row).
+  Confirmed `scripts/apply-reprime-protocol.py` in dev-studio-template is byte-identical
+  to `atilcan65/AtilCalculator` canonical (MD5 `bb13ca41bcb29617c0cf01d04e3cf2d5`,
+  129 lines, ground-truth verified 2026-07-25T17:38Z via md5sum + wc -l per cycle ~#549
+  probe). Per ADR-0075 §B.1, this script is `equivalent` class (Pure protocol logic, no project
+  context — REPRIME 5-step protocol implementation per ADR-0072 §Layer 2) — forward-port
+  confirms sync, no drift detected. Added
+  `scripts/tests/d-s34-002-apply-reprime-protocol-byte-equivalence.sh`
+  (new, ~140 LOC, 7 TCs RED-first per ADR-0044 + ≥6 baseline per ADR-0049) as evidence.
+  Pre-port RED state: TC6+TC7 FAIL (d-test present + impl file already byte-identical
+  at origin/main b0f807e; INDEX.md row + CHANGELOG.md entry missing, real Cadence Rule 1
+  atomic markers per ADR-0044 non-vacuous). Post-port GREEN state: all 7 TCs GREEN.
+  Cadence Rule 1 atomic per ADR-0055 §1: d-test + INDEX.md row + CHANGELOG entry
+  (3 files in same commit; impl file scripts/apply-reprime-protocol.py UNCHANGED — byte-identical
+  to AtilCalculator canonical per ADR-0075 §B.1 `equivalent` row, so NOT part of
+  commit cluster). PR body anchor: `Refs atilproject/AtilCalculator#1222` row007.
+  Sister-patterns: d-s34-002-agent-wake-byte-equivalence.sh (DIRECT sister — row 006 same cycle,
+  same byte-equivalence pattern, same Cadence Rule 1 atomic 3-files cluster),
+  d-s34-002-agent-journal-byte-equivalence.sh (row 005 sister), d-s34-002-health-check-byte-equivalence.sh
+  (row 004 sister), d-s34-002-agent-doctor-byte-equivalence.sh (row 003 sister),
+  d-s34-002-atomic-write-byte-equivalence.sh (row 002 sister),
+  d-s34-002-agent-context-monitor-byte-equivalence.sh (row 001 sister),
+  d-smoke-bootstrap-v110.sh (Sprint 32 d-smoke ≥5 TC baseline precedent). Cycle ~#549
+  PR #209 SQUASH-MERGE TERMINAL + 6/6 SHIPPED + WIP cap 0/2 cleared; cycle ~#549
+  orchestrator dispatch (S34-002 row 007 template continue per cycle ~#3968Q+313
+  owner directive forward-port); NEW DOCTRINE captured (cycle ~#3968Q+311+8):
+  PR-seq squash conflict on CHANGELOG/INDEX — coalesce pattern TBD for row 008+.
