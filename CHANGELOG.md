@@ -660,3 +660,27 @@ CHANGELOG v0.4.0 bump (AC4).
   orchestrator post-squash dispatch (S34-002 row 004 health-check.sh continuation per
   cycle ~#3968Q+313 NEW DOCTRINE scope authority — template continuation, S34-003
   launcher PARKED).
+- **Sprint 34 W2 forward-port S34-002 row 005 — `scripts/agent-journal.sh`
+  byte-equivalence verified** (cycle ~#534, ADR-0075 §B.1 `equivalent` row).
+  Confirmed `scripts/agent-journal.sh` in dev-studio-template is byte-identical
+  to `atilcan65/AtilCalculator` canonical (MD5 `cbf0a0338e69563d8fae38f44aeeb8ab`,
+  198 lines, ground-truth verified 2026-07-25T15:58Z via md5sum + wc -l per cycle ~#534
+  probe). Per ADR-0075 §B.1, this script is `equivalent` class (Generic journal,
+  no project context — system-written facts journal drift-safe) — forward-port confirms
+  sync, no drift detected. Added `scripts/tests/d-s34-002-agent-journal-byte-equivalence.sh`
+  (new, ~140 LOC, 7 TCs RED-first per ADR-0044 + ≥6 baseline per ADR-0049) as evidence.
+  Pre-port RED state: TC6+TC7 FAIL (d-test present + impl file already byte-identical
+  at origin/main cc03909; INDEX.md row + CHANGELOG.md entry missing, real Cadence Rule 1
+  atomic markers per ADR-0044 non-vacuous). Post-port GREEN state: all 7 TCs GREEN.
+  Cadence Rule 1 atomic per ADR-0055 §1: d-test + INDEX.md row + CHANGELOG entry
+  (3 files in same commit; impl file scripts/agent-journal.sh UNCHANGED — byte-identical
+  to AtilCalculator canonical per ADR-0075 §B.1 `equivalent` row, so NOT part of
+  commit cluster). PR body anchor: `Refs atilproject/AtilCalculator#1222` row005.
+  Sister-patterns: d-s34-002-health-check-byte-equivalence.sh (DIRECT sister — row 004
+  same cycle, same byte-equivalence pattern, same Cadence Rule 1 atomic 3-files cluster),
+  d-s34-002-agent-doctor-byte-equivalence.sh (row 003 sister), d-s34-002-atomic-write-byte-equivalence.sh
+  (row 002 sister), d-s34-002-agent-context-monitor-byte-equivalence.sh (row 001 sister),
+  d-smoke-bootstrap-v110.sh (Sprint 32 d-smoke ≥5 TC baseline precedent). Cycle ~#533
+  PR #207 SQUASH-MERGE TERMINAL + 4/4 SHIPPED + WIP cap 0/2 cleared; cycle ~#534
+  orchestrator dispatch (S34-002 row 005 + row 006 template continue per cycle ~#3968Q+313
+  owner directive 2 PR ship then ACK pattern).
