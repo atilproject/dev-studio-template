@@ -45,7 +45,7 @@ permissions:
 jobs:
   d-test-d031:
     name: d031 — claim-next-ready work-stream awareness (template sister)
-    runs-on: [self-hosted, Linux, X64, atilproject]
+    runs-on: [self-hosted, Linux, X64, atilcan]
 
     # 9-Lens (i) sub-categories applied (sister-pattern to source):
     #   1. trigger — push to main + PR to main (mirrors ci.yml semantics)
@@ -81,7 +81,7 @@ jobs:
 
   d-test-dreg:
     name: dreg — post-restart-label-guard (template sister to d064)
-    runs-on: [self-hosted, Linux, X64, atilproject]
+    runs-on: [self-hosted, Linux, X64, atilcan]
 
     # 9-Lens (i) sub-categories applied (sister-pattern to source):
     #   1. trigger — push to main + PR to main (mirrors d031 + ci.yml)

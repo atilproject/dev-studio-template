@@ -11,7 +11,7 @@
 # Sister-pattern to PRs #84, #85, #86 (S29-010 themed impl PRs 1-3/4)
 #
 # Render adaptations (vs .tmpl canonical):
-#   1. runs-on: self-hosted → runs-on: [self-hosted, Linux, X64, atilproject]
+#   1. runs-on: self-hosted → runs-on: [self-hosted, Linux, X64, atilcan]
 #      per S29-001 4-tuple baseline + AC3 enforcement
 #   2. Header comment added: documents OWNER APPROVAL gate + render rationale
 #   3. Sister-pattern to PR-A #84, PR-B #85, PR-C #86 — same 4-tuple discipline
@@ -50,7 +50,7 @@ jobs:
     # PR-B #85, PR-C #86 all use 4-tuple). Source .tmpl uses bare
     # 'self-hosted' for generic-ness; rendered version locks to atilproject
     # runner pool per Sprint 29 canonical config (Issue #1035 AC3).
-    runs-on: [self-hosted, Linux, X64, atilproject]
+    runs-on: [self-hosted, Linux, X64, atilcan]
     timeout-minutes: 5  # bounded; longer = hung runner / script, abort + investigate
 
     env:

@@ -17,7 +17,7 @@ permissions:
 
 jobs:
   cleanup:
-    runs-on: [self-hosted, Linux, X64, atilproject]
+    runs-on: [self-hosted, Linux, X64, atilcan]
     # Only run for merged PRs OR closed issues. Closed-not-merged PRs leave
     # labels intact so an operator can see why the PR was abandoned.
     if: |

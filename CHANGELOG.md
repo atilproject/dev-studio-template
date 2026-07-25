@@ -807,3 +807,18 @@ CHANGELOG v0.4.0 bump (AC4).
 - Row 010 (PR #213, branch dev/s34-002-row-010) = `scripts/lint-notify-invocations.sh` byte-equivalence verified per cycle ~#571 parity probe. Two DRIFT candidates ruled out: `scripts/agent-doctor.sh` (AtilCalc 384 vs template 566 lines) + `scripts/deploy-runner.sh` (AtilCalc 690 vs template 294 lines). Only `scripts/lint-notify-invocations.sh` remained byte-equivalent.
 - Cycle ~#565 + cycle ~#571 single-ship refinement directive (deviation from 2-PR-ship-then-ACK pattern per cycle ~#3968Q+311+7).
 - Cycle ~#3968Q+311+8 REFINEMENT: PR-seq squash conflict CONDITIONAL on branch creation timing — branch dev/s34-002-row-010 created FROM origin/main 417e98cf (post-PR-#212-squash) per preventive measure (branched AFTER = no conflict).
+
+## [Unreleased]
+
+### Changed — Sprint 34 S34-005 Issue #1225
+
+- **Runner label fixed**: 10 `.github/workflows/*.yml` files updated `[self-hosted, Linux, X64, atilproject]` → `[self-hosted, Linux, X64, atilcan]` (13 occurrences total). Files: ai-pr-review.yml (1) + ci.yml (2) + cross-repo-close.yml (1) + d050b-dispatch.yml (1) + deploy.yml (2) + label-check.yml (1) + label-cleanup.yml (1) + lint-and-test.yml (2) + post-squash.yml (1) + secret-canary.yml (1).
+- **Out-of-scope preserved**: `status-label-to-board.yml` (1 atilproject occurrence) NOT changed per orchestrator dispatch scope fidelity.
+- **d-test (NEW, ~140 LOC, 15 TCs)**: `scripts/tests/d-s34-005-runner-label-atilcan.sh` — verifies atilcan label presence per scope file, zero residual atilproject in scope, out-of-scope preservation (dispatch scope fidelity), INDEX.md row + CHANGELOG.md entry presence.
+- **Closes #1225**: First Closes anchor of Sprint 34 work — final S34-005 dispatch per ADR-0057 strict.
+
+### Notes
+
+- Sprint 34 W2 forward-port 10/10 SHIPPED ✅ COMPLETE (PR #204-#213 cluster-squash #{12-21}) per cycle ~#579 milestone.
+- S34-005 owner-approved 22:10+03:00 = 19:10 UTC, 2026-07-25 (orchestrator dispatch).
+- Cycle ~#3968Q+311+8 REFINEMENT preventive measure: branch dev/s34-005-runner-label-atilcan created FROM origin/main c7cd3dc (post-PR-#213-squash = post-W2-COMPLETE), preventing PR-seq squash conflict.

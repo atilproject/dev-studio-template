@@ -38,7 +38,7 @@ on:
 
 jobs:
   behavioral-validation:
-    runs-on: [self-hosted, Linux, X64, atilproject]
+    runs-on: [self-hosted, Linux, X64, atilcan]
     if: ${{ inputs.basic_pull_request_labeled || inputs.silent_skip_non_docs || inputs.cascade_strip_status_duplicates || inputs.reversal_handler }}
     steps:
       - name: Checkout repo

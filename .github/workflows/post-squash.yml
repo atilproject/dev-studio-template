@@ -56,7 +56,7 @@ env:
 jobs:
   cluster-lag-detect:
     name: Detect cluster-squash batch-lag (template verbatim port)
-    runs-on: [self-hosted, Linux, X64, atilproject]
+    runs-on: [self-hosted, Linux, X64, atilcan]
 
     # AC2 guard: only fire on PR closed+merged (NOT closed-not-merged).
     # Without this guard, every PR close (incl. abandoned PRs) would
