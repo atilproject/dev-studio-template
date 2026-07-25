@@ -586,3 +586,28 @@ CHANGELOG v0.4.0 bump (AC4).
   sister, same 4-file Cadence Rule 1 atomic cluster pattern). Cycle ~#437 owner pre-flip
   WIP cap override 3/3 (bypasses ADR-0038 §Auto-Claim cap=2/2); cycle ~#438 d-test
   RED-first verify + commit.
+- **Sprint 34 W2 forward-port S34-002 row 002 — `scripts/atomic-write.sh`
+  byte-equivalence verified** (cycle ~#495, ADR-0075 §B.1 `equivalent` row).
+  Confirmed `scripts/atomic-write.sh` in dev-studio-template is byte-identical
+  to `atilcan65/AtilCalculator` canonical (MD5 `d80f6d0315aaddde6e1cce4f8de97859`,
+  75 lines, ground-truth verified 2026-07-25T07:22Z via md5sum + wc -l per cycle ~#495
+  probe). Per ADR-0075 §B.1, this script is `equivalent` class (Pure utility, no
+  project context — write-to-temp + sync + mv atomic file write helper) —
+  forward-port confirms sync, no drift detected. Added
+  `scripts/tests/d-s34-002-atomic-write-byte-equivalence.sh` (new, ~130 LOC,
+  7 TCs RED-first per ADR-0044 + ≥6 baseline per ADR-0049) as evidence. Pre-port
+  RED state: TC6 + TC7 FAIL (INDEX.md row + CHANGELOG.md entry missing, real
+  Cadence Rule 1 atomic markers per ADR-0044 non-vacuous). Post-port GREEN state:
+  all 7 TCs GREEN. Cadence Rule 1 atomic per ADR-0055 §1: d-test + INDEX.md row
+  + CHANGELOG entry (3 files in same commit; impl file scripts/atomic-write.sh
+  UNCHANGED — byte-identical to AtilCalculator canonical per ADR-0075 §B.1
+  `equivalent` row, so NOT part of commit cluster). PR body anchor:
+  `Refs atilproject/AtilCalculator#1222` row002. Sister-patterns:
+  d-s34-002-agent-context-monitor-byte-equivalence.sh (DIRECT sister — row 001
+  same cycle, same byte-equivalence pattern, same Cadence Rule 1 atomic 3-files
+  cluster), d-smoke-bootstrap-v110.sh (Sprint 32 d-smoke ≥5 TC baseline precedent),
+  d-pr-1147-install-test-flake.sh (Sprint 33 forward-port byte-equal parity doctrine).
+  Cycle ~#493 orchestrator post-squash dispatch (WIP cap=2/2 supersedes prior 3/3
+  override per cycle ~#3968Q+313 newer-directive-wins); cycle ~#494 arch squash-verify
+  ACK + dev lane cleared for row 002+ per RETRO-024 sister-pattern; cycle ~#495
+  worktree setup + d-test RED-first verify.
