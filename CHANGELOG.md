@@ -793,3 +793,17 @@ CHANGELOG v0.4.0 bump (AC4).
   Branch dev/s34-002-row-009 will be created FROM origin/main 9517ba1 (post-PR-#211-squash)
   per cycle ~#3968Q+311+8 REFINEMENT preventive measure (PR-seq squash conflict CONDITIONAL
   on branch creation timing, branched AFTER = no conflict).
+
+## [Unreleased]
+
+### Added — Sprint 34 W2 forward-port S34-002 row 010
+
+- **d-test (row 010)**: `scripts/tests/d-s34-002-lint-notify-invocations-byte-equivalence.sh` (new, ~140 LOC, 7 TCs) — verifies `scripts/lint-notify-invocations.sh` byte-equivalence to `atilcan65/AtilCalculator` canonical (MD5 `ab4eb47dfc8ba27c6e811d6d255453fd`, 95 lines). Generic Issue #320 broken-syntax linter per ADR-0075 §B.1 `equivalent` row classification.
+- **d-test registry**: `scripts/tests/INDEX.md` row 010 entry appended (10th sister — rows 001-009 cycle ~#41-#569 + row 010 cycle ~#571).
+
+### Notes
+
+- Sprint 34 W2 forward-port 9/9 SHIPPED ✅ (PR #204-#212, cluster-squash #{12-20}) per cycle ~#571 dispatch.
+- Row 010 (PR #213, branch dev/s34-002-row-010) = `scripts/lint-notify-invocations.sh` byte-equivalence verified per cycle ~#571 parity probe. Two DRIFT candidates ruled out: `scripts/agent-doctor.sh` (AtilCalc 384 vs template 566 lines) + `scripts/deploy-runner.sh` (AtilCalc 690 vs template 294 lines). Only `scripts/lint-notify-invocations.sh` remained byte-equivalent.
+- Cycle ~#565 + cycle ~#571 single-ship refinement directive (deviation from 2-PR-ship-then-ACK pattern per cycle ~#3968Q+311+7).
+- Cycle ~#3968Q+311+8 REFINEMENT: PR-seq squash conflict CONDITIONAL on branch creation timing — branch dev/s34-002-row-010 created FROM origin/main 417e98cf (post-PR-#212-squash) per preventive measure (branched AFTER = no conflict).
