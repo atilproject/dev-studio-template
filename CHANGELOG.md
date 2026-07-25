@@ -731,3 +731,31 @@ CHANGELOG v0.4.0 bump (AC4).
   orchestrator dispatch (S34-002 row 007 template continue per cycle ~#3968Q+313
   owner directive forward-port); NEW DOCTRINE captured (cycle ~#3968Q+311+8):
   PR-seq squash conflict on CHANGELOG/INDEX — coalesce pattern TBD for row 008+.
+- **Sprint 34 W2 forward-port S34-002 row 008 — `scripts/dev-studio-start.sh`
+  byte-equivalence verified** (cycle ~#557, ADR-0075 §B.1 `equivalent` row).
+  Confirmed `scripts/dev-studio-start.sh` in dev-studio-template is byte-identical
+  to `atilcan65/AtilCalculator` canonical (MD5 `01e97b8b38f5739ee0fc23c4fb8874d5`,
+  270 lines, ground-truth verified 2026-07-25T17:48Z via md5sum + wc -l per cycle ~#557
+  probe). Per ADR-0075 §B.1, this script is `equivalent` class (Pure launcher, no project
+  context — auto-detects REPO_ROOT via script location, REPO_ROOT-overridable for tests/CI
+  via DEV_STUDIO_REPO_ROOT env) — forward-port confirms sync, no drift detected. Added
+  `scripts/tests/d-s34-002-dev-studio-start-byte-equivalence.sh`
+  (new, ~140 LOC, 7 TCs RED-first per ADR-0044 + ≥6 baseline per ADR-0049) as evidence.
+  Pre-port RED state: TC6+TC7 FAIL (d-test present + impl file already byte-identical
+  at origin/main 17bea8ee; INDEX.md row + CHANGELOG.md entry missing, real Cadence Rule 1
+  atomic markers per ADR-0044 non-vacuous). Post-port GREEN state: all 7 TCs GREEN.
+  Cadence Rule 1 atomic per ADR-0055 §1: d-test + INDEX.md row + CHANGELOG entry
+  (3 files in same commit; impl file scripts/dev-studio-start.sh UNCHANGED — byte-identical
+  to AtilCalculator canonical per ADR-0075 §B.1 `equivalent` row, so NOT part of
+  commit cluster). PR body anchor: `Refs atilproject/AtilCalculator#1222` row008.
+  Sister-patterns: d-s34-002-apply-reprime-protocol-byte-equivalence.sh (DIRECT sister —
+  row 007 same cycle, same byte-equivalence pattern, same Cadence Rule 1 atomic 3-files cluster),
+  d-s34-002-agent-wake-byte-equivalence.sh (row 006 sister), d-s34-002-agent-journal-byte-equivalence.sh
+  (row 005 sister), d-s34-002-health-check-byte-equivalence.sh (row 004 sister),
+  d-s34-002-agent-doctor-byte-equivalence.sh (row 003 sister), d-s34-002-atomic-write-byte-equivalence.sh
+  (row 002 sister), d-s34-002-agent-context-monitor-byte-equivalence.sh (row 001 sister),
+  d-smoke-bootstrap-v110.sh (Sprint 32 d-smoke ≥5 TC baseline precedent). Cycle ~#556
+  PR #210 SQUASH-MERGE TERMINAL + 7/7 SHIPPED + WIP cap 0/2 cleared; cycle ~#556
+  orchestrator dispatch (S34-002 row 008 template continue per cycle ~#3968Q+313
+  owner directive forward-port); PR-seq squash conflict on CHANGELOG/INDEX (cycle ~#3968Q+311+8
+  doctrine) — coalesce pattern TBD for row 008+.
