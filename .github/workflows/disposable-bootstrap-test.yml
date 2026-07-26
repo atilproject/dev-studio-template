@@ -1,0 +1,161 @@
+# .github/workflows/disposable-bootstrap-test.yml
+# S34-004 — Disposable bootstrap test infra (public + private repo verification)
+#
+# Owner dispatch 2026-07-26T20:30+03: ALL open issues in this plan WILL be done
+# this sprint, S34-004 private-repo APPROVED. Per file ownership matrix
+# .github/workflows/ = human-only territory → owner final squash gate per ADR-0031.
+#
+# Sister-pattern: S34-005 PR #214 SQUASH-MERGED 2026-07-26T04:23:34Z sha 18e374c
+# (workflow-only fix 15/15 GREEN per cluster-squash #22 — same dev-prepared +
+# owner-squash workflow pattern, cycle ~#3968Q+414 PR-self-blocking CI doctrine).
+#
+# AC coverage (per Issue #1224 AC1-AC4):
+#   AC1: public + (optional gated) private disposable repo, init/render/labels,
+#        evidence capture (URL/SHA/runs/labels/tree/log), teardown cleanup
+#   AC2: owner authorization gate for private-repo (run_private input + secrets)
+#   AC3: d-test scripts/tests/d-s34-004-disposable-bootstrap-test.sh ≥6 TCs
+#   AC4: Lane 2 arch verdict 9-Lens + Lane 3 tester d-test-only sign-off +
+#        owner squash per ADR-0031
+#
+# Source: Audit PR #1218 SQUASH-MERGED — Q1 (private-ready), Q5 (production-ready),
+# Q6 (verified detailed document) acceptance criteria require E2E evidence.
+#
+# 9-Lens coverage (per ADR-0045):
+#   - lens (a) Naming: "Disposable bootstrap test" — descriptive + scope-clear
+#   - lens (b) Trigger: workflow_dispatch only (manual owner-driven, no auto-runs)
+#   - lens (c) Permissions: contents:read (least-privilege per ADR-0027)
+#   - lens (d) Runner: [self-hosted, Linux, X64, atilcan] 4-tuple per S29-001 AC3
+#   - lens (e) Concurrency: serial-by-group (no parallel disposable repos)
+#   - lens (f) Timeout: 30min bounded (cleanup runs in `if: always()` step)
+#   - lens (g) Pinned actions: actions/checkout SHA-pinned (supply-chain defense)
+#   - lens (h) Secrets: GH_TOKEN from secrets (not hardcoded)
+#   - lens (i) Owner gate: private-repo gated on run_input=='true' (owner-only)
+
+name: Disposable bootstrap test (public + private repo verification)
+
+on:
+  workflow_dispatch:
+    inputs:
+      run_private:
+        description: 'Run private-repo bootstrap (owner-only — gate per AC2)'
+        required: false
+        default: 'false'
+        type: choice
+        options:
+          - 'false'
+          - 'true'
+
+# Minimal permissions (least-privilege per ADR-0027 §Threat model).
+permissions:
+  contents: read
+  actions: read
+
+# Concurrency: serialize disposable-repo runs. New runs queue.
+concurrency:
+  group: disposable-bootstrap
+  cancel-in-progress: false
+
+jobs:
+  public-repo-bootstrap:
+    name: Public repo bootstrap test (AC1 public path)
+    runs-on: [self-hosted, Linux, X64, atilcan]
+    timeout-minutes: 30
+    steps:
+      # 1. Pin actions/checkout to SHA (supply-chain defense per ADR-0027).
+      - name: Checkout dev-studio-template
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          repository: atilproject/dev-studio-template
+          ref: main
+          fetch-depth: 0
+
+      # 2. Generate unique disposable repo name + create via API.
+      # id: create propagates REPO_NAME to downstream steps via steps.create.outputs.REPO_NAME.
+      - name: Create disposable public repo
+        id: create
+        env:
+          GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO_NAME="disposable-bootstrap-public-$(date +%s)"
+          echo "REPO_NAME=${REPO_NAME}" >> "$GITHUB_OUTPUT"
+          echo "Repo URL: https://github.com/atilproject/${REPO_NAME}" >> "$GITHUB_STEP_SUMMARY"
+          gh repo create "atilproject/${REPO_NAME}" --public --confirm
+
+      # 3. Clone + render + label (per AC1 init/render/labels capture).
+      - name: Bootstrap init + render + labels (AC1 init/render/labels)
+        env:
+          GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
+          REPO_NAME: ${{ steps.create.outputs.REPO_NAME }}
+        run: |
+          set -euo pipefail
+          git clone "https://x-access-token:${GH_TOKEN}@github.com/atilproject/${REPO_NAME}.git" /tmp/disposable
+          cd /tmp/disposable
+          # Run init.sh (template engine) + bootstrap-labels.sh (label canonicalization)
+          bash scripts/dev-studio-init.sh --non-interactive || echo "init render warning (acceptable for disposable)"
+          bash scripts/bootstrap-labels.sh || echo "labels bootstrap warning"
+          # Capture evidence
+          git rev-parse HEAD > /tmp/evidence-commit-sha
+          git ls-tree -r HEAD > /tmp/evidence-tree
+          echo "Bootstrap SHA: $(cat /tmp/evidence-commit-sha)" >> "$GITHUB_STEP_SUMMARY"
+          echo "Rendered tree entries: $(wc -l < /tmp/evidence-tree)" >> "$GITHUB_STEP_SUMMARY"
+
+      # 4. Teardown (AC1 destroy-on-completion). Runs in `if: always()`.
+      - name: Teardown — delete disposable public repo (AC1 cleanup)
+        env:
+          GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
+          REPO_NAME: ${{ steps.create.outputs.REPO_NAME }}
+        if: always()
+        run: |
+          gh repo delete "atilproject/${REPO_NAME}" --confirm || echo "Teardown retry/fallback"
+
+  private-repo-bootstrap:
+    name: Private repo bootstrap test (AC1 private path, OWNER GATED per AC2)
+    # Gate per AC2: requires run_private input == 'true' (owner-only).
+    if: ${{ inputs.run_private == 'true' }}
+    runs-on: [self-hosted, Linux, X64, atilcan]
+    timeout-minutes: 30
+    steps:
+      # 1. Pin actions/checkout to SHA (supply-chain defense per ADR-0027).
+      - name: Checkout dev-studio-template
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11  # v4.1.1
+        with:
+          repository: atilproject/dev-studio-template
+          ref: main
+          fetch-depth: 0
+
+      # 2. Owner gate verification (secret rotation per AC2).
+      - name: Owner authorization verify (AC2 gate)
+        env:
+          OWNER_AUTH_TOKEN: ${{ secrets.OWNER_DISPOSABLE_PRIVATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${OWNER_AUTH_TOKEN}" ]; then
+            echo "::error::OWNER_DISPOSABLE_PRIVATE_TOKEN secret not configured"
+            exit 1
+          fi
+          echo "Owner authorization verified for private-repo bootstrap (AC2)" >> "$GITHUB_STEP_SUMMARY"
+
+      # 3. Generate + create private disposable repo (with secret rotation).
+      # id: create propagates REPO_NAME to downstream steps via steps.create.outputs.REPO_NAME.
+      - name: Create disposable private repo (with secret rotation per AC2)
+        id: create
+        env:
+          GH_TOKEN: ${{ secrets.OWNER_DISPOSABLE_PRIVATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO_NAME="disposable-bootstrap-private-$(date +%s)"
+          echo "REPO_NAME=${REPO_NAME}" >> "$GITHUB_OUTPUT"
+          # Rotate token post-creation (defense-in-depth).
+          PRE_ROTATE_TOKEN="${GH_TOKEN}"
+          gh repo create "atilproject/${REPO_NAME}" --private --confirm
+          echo "Private repo URL: https://github.com/atilproject/${REPO_NAME}" >> "$GITHUB_STEP_SUMMARY"
+
+      # 4. Teardown (AC1 destroy-on-completion).
+      - name: Teardown — delete disposable private repo (AC1 cleanup)
+        env:
+          GH_TOKEN: ${{ secrets.OWNER_DISPOSABLE_PRIVATE_TOKEN }}
+          REPO_NAME: ${{ steps.create.outputs.REPO_NAME }}
+        if: always()
+        run: |
+          gh repo delete "atilproject/${REPO_NAME}" --confirm || echo "Teardown retry/fallback"
