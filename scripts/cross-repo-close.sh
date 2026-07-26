@@ -1,10 +1,3 @@
-# TEMPLATE PORT (Issue #372, RETRO-005 candidate): mirrors the AtilCalculator
-# cross-repo-close.sh (MERGED with AtilCalc workflow). Future bootstrapped repos
-# inherit this cross-repo close capability as part of the template bootstrap.
-#
-# Sister port to Issue #290 (wip-idle-detect, MERGED with PR #59 in template).
-# Sister workflow: .github/workflows/cross-repo-close.yml (this PR).
-#
 #!/usr/bin/env bash
 # cross-repo-close.sh — Bridge script for cross-repo PR auto-close.
 #
@@ -31,7 +24,7 @@
 #     bash scripts/cross-repo-close.sh
 #
 #   # Manual review (dry-run):
-#   PR_NUMBER=57 REPO=atilcan65/dev-studio-template \
+#   PR_NUMBER=57 REPO=atilproject/dev-studio-template \
 #     bash scripts/cross-repo-close.sh --dry-run
 #
 # Exit codes:
@@ -73,7 +66,7 @@ fi
 # --- Validate inputs (only when not dry-run) ---
 if [[ "$DRY_RUN" == "false" ]]; then
   : "${PR_NUMBER:?PR_NUMBER env var required}"
-  : "${REPO:?REPO env var required (e.g., atilcan65/AtilCalculator)}"
+  : "${REPO:?REPO env var required (e.g., <owner>/<repo>)}"
 fi
 
 # --- Caveat 5: Dry-run path ---
