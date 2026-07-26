@@ -1,20 +1,15 @@
 #!/usr/bin/env bash
 # audit-project-refs.sh — STORY-S21-004 / Issue #651 (Project Refs Audit Script).
-# Forward-ported via STORY-S29-008 (Issue #1033, Sprint 29 W2) for dev-studio-template.
 #
 # Why this exists
 # ---------------
-# Without an audit, hardcoded org/project refs leak through template clones. The
-# init script (S21-003a, dev-studio-init.sh) replaces `{{...}}` placeholders with
-# user-provided values, but only IF the user runs it. This audit catches places
-# where the init was missed or didn't catch all refs.
-#
-# Path parameterization (S29-008 AC3):
-#   Override via env var: ORG=myorg PROJECT_NAME=MyProject bash audit-project-refs.sh
-#   Defaults: ORG=atilproject, PROJECT_NAME=AtilCalculator
+# Without an audit, hardcoded "AtilCalculator" / "atilcan65" refs leak through
+# template clones. The init script (S21-003a, dev-studio-init.sh) replaces
+# `{{...}}` placeholders with user-provided values, but only IF the user runs it.
+# This audit catches places where the init was missed or didn't catch all refs.
 #
 # Acceptance criteria (Issue #651):
-#   AC1 — Run on pre-init clone → exits 1 (catches `${ORG}` or `${PROJECT_NAME}` hardcoded refs).
+#   AC1 — Run on pre-init clone → exits 1 (catches `AtilCalculator` or `atilcan65`).
 #   AC2 — Run on post-init clone → exits 0 (no hardcoded refs).
 #   AC3 — Run in CI on template PR → blocks merge if exit 1.
 #
@@ -37,27 +32,6 @@ set -uo pipefail
 # --- args ---
 TARGET_DIR="${1:-.}"
 JSON_OUTPUT=false
-if [ "$TARGET_DIR" = "--help" ] || [ "$TARGET_DIR" = "-h" ]; then
-  cat <<'EOF'
-Usage: audit-project-refs.sh [TARGET_DIR] [--json]
-
-Project Refs Audit (STORY-S21-004, forward-ported via S29-008).
-
-Arguments:
-  TARGET_DIR              Directory to audit (default: current dir)
-  --json                  Emit machine-readable JSON output
-
-Environment:
-  ORG                     GitHub org to flag as hardcoded ref (default: atilproject)
-  PROJECT_NAME            Project name to flag as hardcoded ref (default: AtilCalculator)
-
-Exit codes:
-  0  Clean — no hardcoded refs found
-  1  Hardcoded refs found (CI blocks merge)
-  2  Preflight failure (missing tool, not a git repo, etc.)
-EOF
-  exit 0
-fi
 if [ "$TARGET_DIR" = "--json" ]; then
   JSON_OUTPUT=true
   TARGET_DIR="."
@@ -83,15 +57,15 @@ if ! git -C "$TARGET_DIR" rev-parse --is-inside-work-tree >/dev/null 2>&1; then
 fi
 
 # --- main scan ---
-# Patterns to flag as hardcoded refs (Sprint 22 PIVOT migration fallout).
-# Per S29-008 AC3, parameterized via ${ORG} env var with default `atilproject`
-# (canonical org for dev-studio-template). Override with: ORG=myorg bash audit-project-refs.sh
-# We use word-boundary regex to avoid false positives on substring matches.
-ORG="${ORG:-atilproject}"
-PROJECT_NAME="${PROJECT_NAME:-AtilCalculator}"
+# Patterns to flag as hardcoded refs (Sprint 22 PIVOT migration fallout):
+#   - AtilCalculator      (the project's own name, capitalized)
+#   - atilcan65           (the original owner's GitHub login)
+#   - atilcalc-engine     (a known submodule dir from earlier sprints)
+# We use word-boundary regex to avoid false positives on substring matches
+# like "atilcalc-architect-td012" (out of scope per Issue #651 explicit).
 PATTERNS=(
-  "\b${PROJECT_NAME}\b"
-  "\b${ORG}\b"
+  '\bAtilCalculator\b'
+  '\batilcan65\b'
 )
 EXCLUDE_PATTERNS=(
   ':!*.md'        # docs may legitimately reference the name
