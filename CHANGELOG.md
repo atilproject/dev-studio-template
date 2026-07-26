@@ -9,6 +9,20 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 ### Added — Sprint 34 W3 forward-port S34-002 row 011
 
 - **d-test (row 011)**: `scripts/tests/d-s34-002-audit-project-refs-byte-equivalence.sh` (new, ~140 LOC, 7 TCs) — verifies `scripts/audit-project-refs.sh` byte-equivalence to `atilcan65/AtilCalculator` canonical (MD5 `bdefdc0b37af2d66f2e349375c0dcde0`, 140 lines). Generic project-ref-audit script per ADR-0075 §B.1 `equivalent` row classification (architect confirmed "generic — pure project ref audit"). Template pre-port: 166 lines, MD5 `b6c802a03ae3560260f71e9ed43451b1` — 26-line DRIFT. Post-port: byte-identical to canonical.
+
+### Added — Sprint 34 W4 forward-port S34-002 row 014
+
+- **d-test (row 014)**: `scripts/tests/d-s34-002-row-014-claim-next-ready-byte-equivalence.sh` (new, ~210 LOC, 9 TCs) — verifies `scripts/claim-next-ready.sh` byte-equivalence to `atilcan65/AtilCalculator` canonical (MD5 `f7843ac55c34bf82b3c161e71609db82`, 615 lines). Pure byte-equivalence parity attestation per ADR-0075 §B.1 `equivalent` row classification (0-line DRIFT, byte-identical). 9 TCs include: TC1 file exists, TC2 bash -n, TC3 line count = 615, TC4 MD5 = `f7843ac55c34bf82b3c161e71609db82` (byte-equivalence proof), TC5 Sprint 33 amendment markers (5 markers: CLAIM_NEXT_READY_LOCK_FILE + claim-next-ready.sh + status:in-progress + RETRO-024 + WIP_LIMIT), TC6 state machine integrity (5 markers: agent: prefix + gh issue + gh issue edit + gh issue comment + auto-claim.log), TC7 INDEX.md row, TC8 CHANGELOG.md entry, TC9 d031 sister-test cross-spec linkage. ≥6 TCs baseline per ADR-0049 — d-s34-002-row-014 = 9 TCs exceeds baseline by 3.
+- **Impl (row 014)**: `scripts/claim-next-ready.sh` (UNCHANGED — pure byte-equivalence parity attestation net 0-line delta). Sprint 33 amendments embedded: CLAIM_NEXT_READY_LOCK_FILE env var override (cycle ~#3853 TC1 env-rot fix) + RETRO-024 silent-skip on work-done-elsewhere terminal state (cycle ~#3968Q+214 status-only atomic). Both already byte-equivalent to template since Sprint 33.
+- **d-test registry**: `scripts/tests/INDEX.md` row 014 entry appended (14th sister — rows 001-013 SHIPPED + row 014 cycle ~#723 dispatch).
+- **Branch**: dev/s34-002-row-014 from tmpl-official/main 55cb3dc POST-#217-squash per cycle ~#3968Q+311+8 CONDITIONAL preventive.
+
+### Notes — Sprint 34 W4 forward-port S34-002 row 014
+
+- Sprint 34 W3 forward-port 3/3 SHIPPED-functional ✅ (PR #215 + #216 + #217, cluster-squash #{26-28}) — row 014 = 4th forward-port SHIPPED-functional after rows 011-013.
+- Pre-port RED state NON-VACUOUS per ADR-0044 (TC7+TC8 FAIL — verified locally at cycle ~#723: 7 GREEN + 2 RED).
+- 4-file atomic per ADR-0055 §1: `scripts/claim-next-ready.sh` (UNCHANGED) + `scripts/tests/d-s34-002-row-014-claim-next-ready-byte-equivalence.sh` (NEW) + `scripts/tests/INDEX.md` (MODIFIED) + `CHANGELOG.md` (MODIFIED, this entry).
+- Cluster-squash #29 candidate STANDALONE per cycle ~#3968Q+3258.
 - **Impl (row 011)**: `scripts/audit-project-refs.sh` (MODIFIED — copied canonical 140-line version over template's 166-line version, net -26 lines). Script's `atilcan65` + `AtilCalculator` literals are PATTERNS scanned for, NOT project paths (TC4 strict-path regex check passes). 7 TCs include: TC1 file exists, TC2 line count = 140, TC3 MD5 matches canonical, TC4 no project-specific paths (strict path regex), TC5 key markers (PATTERNS + EXCLUDE_PATTERNS + git grep + JSON_OUTPUT + exit 0/1/2 + audit pattern literals), TC6 INDEX.md row (Cadence Rule 1 atomic), TC7 CHANGELOG.md entry.
 - **d-test registry**: `scripts/tests/INDEX.md` row 011 entry appended (11th sister — rows 001-010 cycle ~#41-#571 + row 011 cycle ~#675).
 

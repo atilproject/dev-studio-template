@@ -15,6 +15,8 @@
 #   2  usage error (missing/invalid role argument)
 #   3  WIP limit reached (>= WIP_LIMIT status:in-progress items already)
 #   4  gh API error (network/auth/repo detection/jq failure)
+#   6  ROLLBACK flip-not-applied (Issue #1041: per-issue view missing status:in-progress)
+#   7  ROLLBACK wip-over-cap-post-flip (Issue #1041: search-index caught up > cap)
 #
 # Env:
 #   WIP_LIMIT              per-role WIP cap (default: 2, ADR-0002 §polling cadence)
@@ -193,15 +195,14 @@ fi
   # invocations can detect dead PIDs (sister to PR #825 flock mutex).
   printf '%s\n' "$$" > "$PID_FILE" 2>/dev/null || true
 
-# --- gh API helper (tmpl Issue #116 RED → GREEN impl; d116 d-test) ---
-# Sister-pattern: calc scripts/claim-next-ready.sh _gh_api_with_retry
-# (calc Issue #1089, calc PR #1099, calc d1082 d-test, cycle ~#2305 squash-ready).
+# --- gh API helper (Issue #1089 RED → GREEN impl; d1082 d-test) ---
 # Wraps `gh api <url> --jq <filter>` with 3-attempt retry-with-exponential-backoff
 # (sleep 1, 2, 5 seconds between attempts). Distinguishes deterministic client
 # errors (HTTP 401/403/404) — fail-fast NO retry — from transient/network
 # failures (5xx, brownouts, rate-limit) — retry with backoff. Surfaces stderr
 # on final failure (RETRO-005 #26 hygiene: no `2>/dev/null` swallowing).
 # Returns 4 (gh API error code per script-level exit-code matrix) on final failure.
+# Sister-pattern d1082 (Issue #1089 P1 BUG regression guard, ADR-0044 RED-first).
 _gh_api_with_retry() {
   local url="$1"
   local jq_filter="$2"
@@ -253,15 +254,14 @@ if [ "$WIP_COUNT_ONLY" = "true" ] && { [ "$ROLE" = "*" ] || [ "$ROLE" = "global"
   # arch RCA cmt 4882811076). Client-side jq filter `select(.pull_request == null)`
   # is the correct exclusion mechanism — real issues have pull_request=null,
   # PRs have pull_request != null. Fix lands v2 d827 (PR #832) RED → GREEN.
-  # tmpl Issue #116: gh API retry-with-backoff via _gh_api_with_retry (d116 d-test).
   in_progress_json="$(_gh_api_with_retry \
     "repos/${REPO}/issues?labels=status:in-progress&state=open&per_page=100" \
     "[.[] | select(.pull_request == null) | {number, labels: [.labels[] | {name}]}]")" || exit 4
 else
   # Issue #806: gh issue list --label silent-drop — switch to REST gh api
+  # Issue #1089: gh API retry-with-backoff via _gh_api_with_retry (d1082 d-test).
   # Issue #831 DESIGN-DRIFT: client-side jq filter on PR exclusion
   # (URL `pull_request=false` is a no-op per arch RCA cmt 4882811076).
-  # tmpl Issue #116: gh API retry-with-backoff via _gh_api_with_retry (d116 d-test).
   in_progress_json="$(_gh_api_with_retry \
     "repos/${REPO}/issues?labels=agent:${ROLE},status:in-progress&state=open&per_page=100" \
     "[.[] | select(.pull_request == null) | {number, labels: [.labels[] | {name}]}]")" || exit 4
@@ -409,6 +409,36 @@ if [ "${CLAIM_NEXT_READY_FORM_C_VERIFY:-1}" = "1" ]; then
   fi
 fi
 
+# --- RETRO-024 silent-skip on work-done-elsewhere terminal state (Issue #1027) ---
+# Per CLAUDE.md §Work-done-elsewhere terminal state (RETRO-024 amendment): when
+# an issue has labels `status:ready + cc:human`, it is a work-done-elsewhere
+# terminal state (cross-repo sister-PR per RETRO-023). Reflexively added
+# `agent:*` would re-enable auto-claim on completed items (cycle #1223 LIVE
+# INSTANCE: orchestrator reflexive 4-cat repair on work-done issues #1015 + #1017).
+#
+# Even though the ready-items query filters by `agent:${ROLE},status:ready` and
+# the work-done-elsewhere issues technically should have NO `agent:*` (canonical
+# terminal state per AC2), a reflexively-added `agent:*` (orchestrator / PM
+# auto-watch tick) can bring them into this result set. Filter them out + emit
+# silent_skip log per TD-016/020 family (lens d observability).
+WORK_DONE_ELSEWHERE_COUNT=$(printf '%s' "$ready_raw" | jq '[.[] | select((.labels | map(select(.name == "cc:human")) | length > 0) and (.labels | map(select(.name | startswith("agent:"))) | length == 0))] | length' 2>/dev/null || echo 0)
+if [ "${WORK_DONE_ELSEWHERE_COUNT:-0}" -gt 0 ]; then
+  # Filter out work-done-elsewhere items from ready_raw (RETRO-024 silent-skip).
+  # Predicate requires BOTH `cc:human` present AND `agent:*` absent — canonical
+  # RETRO-024 work-done-elsewhere terminal state per CLAUDE.md §Work-done-elsewhere
+  # (Issue #1027). Active claim candidates carrying `cc:human` alongside `agent:*`
+  # (e.g., tester APPROVED + cc:human canonical pre-merge gate per ADR-0012) are
+  # KEPT — only true work-done-elsewhere items (cc:human + NO agent:*) are removed.
+  ready_raw="$(printf '%s' "$ready_raw" | jq '[.[] | select((.labels | map(select(.name == "cc:human")) | length > 0) and (.labels | map(select(.name | startswith("agent:"))) | length == 0) | not)]' 2>/dev/null)"
+  # silent_skip log emission per lens (d) + TD-016/020 family
+  _wd_repo_name="${REPO##*/}"
+  _wd_log_dir="${AUTO_CLAIM_LOG_DIR:-/var/log/dev-studio/${_wd_repo_name}}"
+  mkdir -p "$_wd_log_dir" 2>/dev/null || true
+  _wd_now_iso="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+  echo "$_wd_now_iso $ROLE work-done-elsewhere-silent-skip (count=${WORK_DONE_ELSEWHERE_COUNT}) silent_skip" \
+    >> "$_wd_log_dir/auto-claim.log" 2>/dev/null || true
+fi
+
 ready_count="$(printf '%s' "$ready_raw" | jq 'length' 2>/dev/null || echo 0)"
 if [ "$ready_count" = "0" ]; then
   echo "[claim-next-ready.sh] no ready items for role=$ROLE — no claim"
@@ -485,11 +515,83 @@ fi
 now_iso="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 wip_after=$((wip_count + 1))
 
+# Audit log path hoisted before flip so verify_post_flip can write ROLLBACK entries.
+repo_name="${REPO##*/}"
+log_dir="${AUTO_CLAIM_LOG_DIR:-/var/log/dev-studio/${repo_name}}"
+mkdir -p "$log_dir" 2>/dev/null || true
+audit_log="$log_dir/auto-claim.log"
+
 if ! gh issue edit "$picked_number" --repo "$REPO" \
     --remove-label "status:ready" \
     --add-label "status:in-progress" >/dev/null 2>&1; then
   echo "ERROR: gh issue edit failed for #$picked_number" >&2
   exit 4
+fi
+
+# --- post-flip verification (Issue #1041 AC1) ---
+# GitHub's `gh api repos/.../issues?labels=...` search-index is eventually consistent.
+# Between the pre-flip WIP query (line ~213) and this verification, concurrent claims
+# may have flipped items not yet indexed. Without verification, the cap can be bypassed
+# (live incident: 3 claims in 36s while WIP_LIMIT=2 — only 2 were pre-flip-visible).
+# Two-step check: (1) per-issue strongly-consistent view confirms flip applied,
+# (2) retry search-index up to 3× for eventual-consistency window (~1-3s typically).
+verify_post_flip() {
+  local picked_num="$1"
+  local max_retries=3
+  local retry=0
+
+  # (1) Per-issue view — strongly consistent. If status:in-progress missing, flip
+  #     didn't actually apply (rare; can happen if another actor undid it).
+  if ! gh issue view "$picked_num" --repo "$REPO" --json labels \
+       --jq '.labels[].name' 2>/dev/null | grep -q "^status:in-progress$"; then
+    echo "ROLLBACK: #$picked_num flip did not apply (per-issue view missing status:in-progress)" >&2
+    gh issue edit "$picked_num" --repo "$REPO" \
+      --remove-label "status:in-progress" --add-label "status:ready" \
+      >/dev/null 2>&1 || true
+    echo "$now_iso $ROLE ROLLBACK #$picked_num (flip-not-applied)" \
+      >> "$audit_log" 2>/dev/null || true
+    return 6
+  fi
+
+  # (2) Re-query search-index with retry — eventual consistency window (typically <5s).
+  local post_flip_count=0
+  while [ "$retry" -lt "$max_retries" ]; do
+    sleep 1
+    local post_json
+    # gh api returns raw JSON array; use external jq for length (matches line 207/213
+    # pattern). gh CLI's --jq flag is NOT applied in test mode (fake-gh on PATH),
+    # so we rely on external jq to parse the JSON consistently across prod + test.
+    post_json="$(gh api \
+      "repos/${REPO}/issues?labels=agent:${ROLE},status:in-progress&state=open&per_page=100" \
+      2>/dev/null || echo '[]')"
+    post_flip_count="$(printf '%s' "$post_json" | jq 'length' 2>/dev/null || echo 0)"
+    if ! [[ "$post_flip_count" =~ ^[0-9]+$ ]]; then
+      post_flip_count=0
+    fi
+    # Search-index caught up to at least pre-flip+1 (the just-flipped item) — trust it.
+    if [ "$post_flip_count" -gt "$wip_count" ]; then
+      break
+    fi
+    retry=$((retry + 1))
+  done
+
+  if [ "$post_flip_count" -gt "$WIP_LIMIT" ]; then
+    echo "ROLLBACK: #$picked_num WIP over cap post-flip (search-index=$post_flip_count > WIP_LIMIT=$WIP_LIMIT)" >&2
+    gh issue edit "$picked_num" --repo "$REPO" \
+      --remove-label "status:in-progress" --add-label "status:ready" \
+      >/dev/null 2>&1 || true
+    echo "$now_iso $ROLE ROLLBACK #$picked_num (wip-over-cap-post-flip=$post_flip_count limit=$WIP_LIMIT)" \
+      >> "$audit_log" 2>/dev/null || true
+    return 7
+  fi
+
+  return 0
+}
+
+verify_post_flip "$picked_number"
+verify_post_flip_rc=$?
+if [ "$verify_post_flip_rc" -ne 0 ]; then
+  exit "$verify_post_flip_rc"
 fi
 
 # Comment is best-effort (warn on failure but still exit 0 since the flip succeeded).
@@ -500,10 +602,7 @@ Per ADR-0038 §Auto-Claim Protocol. Priority=$picked_priority_label." >/dev/null
 fi
 
 # Audit log: append-only, ISO-8601 + role + issue + wip + priority (ADR-0036 pattern).
-repo_name="${REPO##*/}"
-log_dir="${AUTO_CLAIM_LOG_DIR:-/var/log/dev-studio/${repo_name}}"
-mkdir -p "$log_dir" 2>/dev/null || true
-audit_log="$log_dir/auto-claim.log"
+# log_dir / audit_log hoisted to pre-flip block so verify_post_flip can write ROLLBACK entries.
 echo "$now_iso $ROLE claimed #$picked_number (WIP=$wip_after/$WIP_LIMIT, $picked_priority_label)" \
   >> "$audit_log" 2>/dev/null || echo "WARN: audit log write failed at $audit_log" >&2
 
