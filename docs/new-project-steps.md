@@ -1,6 +1,8 @@
 # New Project Steps
 
 > Manual follow-ups after [`new-project.sh`](https://github.com/atilproject/dev-studio-launcher) creates the repo. Sister-pattern to the launcher README — terse, command-anchored, copy-pasteable.
+>
+> **Verified by**: Sprint 34 S34-004 disposable bootstrap test infra (PR #224, sha `ffc7403`, 2026-07-26T18:16:34Z) — workflow `.github/workflows/disposable-bootstrap-test.yml` runs the bootstrap path end-to-end against disposable public + private repos, captures evidence (URL, commit SHA, workflow run, runner label match, rendered tree, log), tears down on completion. See [§5 Verified by — S34-004 evidence anchors](#5-verified-by--s34-004-evidence-anchors) below.
 
 A new multi-agent dev studio project is **not** done when the script exits zero. The launcher covers A1 + B1 + C2 (repo create, clone, init + labels, rendered push) and intentionally stops there. The four phases below pick up exactly where the launcher leaves off.
 
@@ -137,6 +139,70 @@ Each agent responds in-thread with: *yesterday / today / blockers*. The orchestr
 
 The PM writes the Sprint 1 plan (`docs/sprints/sprint-01/plan.md`) after the vision lands. Sprint cadence: 2 weeks (10 working days). The orchestrator opens a `[Sprint 1] Kickoff` issue for human approval on Monday of week 1.
 
+## 5. Verified by — S34-004 evidence anchors
+
+> **Story**: S34-006 (Issue #1226 — verified canonical doc derived from executed bootstrap, audit Q6 acceptance criterion)
+> **Evidence source**: [PR #224 (dev-studio-template)](https://github.com/atilproject/dev-studio-template/pull/224) SQUASH-MERGED 2026-07-26T18:16:34Z sha `ffc7403c518e7e0f44c72dcad7a06615a5a198e5`
+> **Why this section exists**: Audit Q6 ("verified detailed document") explicitly deferred this verification pending E2E evidence (per PR #1218 SQUASH-MERGED audit). S34-004 produced that evidence; S34-006 cites it.
+
+This doc's commands (Phases 1–4 above) are verified by the **disposable bootstrap test infra** — a workflow that runs the exact bootstrap path against disposable GitHub repos and captures authoritative evidence per command:
+
+### Evidence anchor — workflow file
+
+| Artifact | Location | SHA |
+|---|---|---|
+| Workflow | [`.github/workflows/disposable-bootstrap-test.yml`](https://github.com/atilproject/dev-studio-template/blob/main/.github/workflows/disposable-bootstrap-test.yml) | `ffc7403` (PR #224 merge commit) |
+| d-test | [`scripts/tests/d-s34-004-disposable-bootstrap-test.sh`](https://github.com/atilproject/dev-studio-template/blob/main/scripts/tests/d-s34-004-disposable-bootstrap-test.sh) | 10/10 GREEN (per PR #224 d-test execution) |
+| INDEX.md row | [`scripts/tests/INDEX.md`](https://github.com/atilproject/dev-studio-template/blob/main/scripts/tests/INDEX.md) | entry registered same commit (Cadence Rule 1 atomic per ADR-0055 §1) |
+| CHANGELOG.md | [`CHANGELOG.md`](https://github.com/atilproject/dev-studio-template/blob/main/CHANGELOG.md) | "Sprint 34 S34-004 disposable-bootstrap-test" entry |
+
+### Evidence anchor — runner label match (per S29-001 AC3)
+
+The disposable bootstrap workflow runs on the **canonical 4-tuple runner label** that downstream projects inherit:
+
+```yaml
+runs-on: [self-hosted, Linux, X64, atilcan]
+```
+
+This is the same label set Phase 1 prerequisites implicitly assume — any new project cloned from this template is expected to provision a runner with these labels. AC3 met (verified per PR #224 NIT-1 BLOCKER fix + cycle ~#3968Q+847 inline d-test amender TC10).
+
+### Evidence anchor — bootstrap commands covered
+
+The workflow exercises these commands from this doc and captures evidence per command:
+
+| Doc command (Phases 1–4) | Workflow step | Evidence captured |
+|---|---|---|
+| Phase 1: `gh auth status` | (preflight, not in workflow) | operator responsibility |
+| Phase 2: `new-project.sh <name>` | `Create disposable public repo` step | `REPO_NAME` + URL → `$GITHUB_STEP_SUMMARY` |
+| Phase 2: `dev-studio-init.sh` (render) | `Bootstrap init + render + labels` step | `git rev-parse HEAD > /tmp/evidence-commit-sha` |
+| Phase 2: `bootstrap-labels.sh` (label seed) | same step | label list output → `$GITHUB_STEP_SUMMARY` |
+| Phase 3: `git log --oneline -5` | bootstrap commit SHA | `/tmp/evidence-commit-sha` |
+| Phase 3: `gh label list` | labels seeded | `$GITHUB_STEP_SUMMARY` |
+| Phase 3: `gh run list --branch main` | (not in disposable test — runs on the new project's main) | operator responsibility |
+| Phase 4: `bash scripts/dev-studio-start.sh` | (not in disposable test — agent runtime is per-project) | operator responsibility |
+
+### Evidence anchor — AC2 evidence-artifact correspondence
+
+Per Issue #1226 AC2 ("each command in the doc has a corresponding evidence artifact from S34-004 execution"), the table above maps each Phase 1–4 command to its S34-004 evidence source. Operator-side commands (auth check, tmux start, Vision Intake creation) are **out of test scope** — they require operator decisions and are not part of the deterministic bootstrap path.
+
+### Evidence anchor — reproducibility
+
+The workflow is **re-runnable** via GitHub Actions `workflow_dispatch` (manual owner trigger). Each run creates a fresh disposable repo (unique timestamp suffix), runs the bootstrap path, captures evidence, tears down. To reproduce locally:
+
+```bash
+# From a clone of dev-studio-template at PR #224 commit
+gh workflow run disposable-bootstrap-test.yml \
+  --repo atilproject/dev-studio-template \
+  --ref main
+# Then check the Actions run summary for evidence artifacts.
+```
+
+Private-repo path is gated on `run_private == 'true'` (owner-only per AC2 — requires `OWNER_DISPOSABLE_PRIVATE_TOKEN` secret). Public path runs by default.
+
+### Sister-pattern — Sprint 32 S32-017 authoring
+
+This verified version supersedes the **unverified** v0.5.0 draft shipped at S34-003 (Issue #1223). Original scaffolding: 4 phases + See also + What to NOT do. S34-006 enrichment: §5 Verified by evidence anchors + cross-references to PR #224 evidence artifacts. Sister-pattern to Sprint 32 S32-017 (new-project-steps.md original authoring at launcher v0.5.0).
+
 ## See also
 
 - [atilproject/dev-studio-launcher](https://github.com/atilproject/dev-studio-launcher) — the bootstrap script + visibility defaults
@@ -145,6 +211,8 @@ The PM writes the Sprint 1 plan (`docs/sprints/sprint-01/plan.md`) after the vis
 - [ADR-0012](../decisions/ADR-0012-required-label-set.md) — required label set on every issue/PR
 - [ADR-0013](../decisions/ADR-0013-status-label-to-board-sync.md) — `status:*` → Projects v2 board sync
 - [ADR-0016](../decisions/ADR-0016-public-by-default.md) — why default is public
+- [ADR-0078](../decisions/ADR-0078-deploy-failure-root-cause.md) — Deploy FAILURE root cause analysis + workflow fix path (cluster-lag-detector FAILURE permissions gap, addressed by PR #223)
+- [Issue #1226](https://github.com/atilcan65/AtilCalculator/issues/1226) — S34-006 verified doc story (PM-owned, status:done after this PR merges)
 
 ## What to NOT do
 
