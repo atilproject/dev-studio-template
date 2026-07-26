@@ -60,7 +60,7 @@ fi
 OWNER="${REPO%/*}"
 REPO_NAME="${REPO#*/}"
 BOARD_TITLE="${BOARD_TITLE:-${REPO_NAME} board}"
-STATUS_OPTIONS=("Backlog" "Ready" "In Progress" "In Review" "Done")
+STATUS_OPTIONS=("Backlog" "Ready" "In Progress" "In Review" "Blocked" "Done")
 
 command -v gh >/dev/null 2>&1 || { err "gh CLI not found"; exit 2; }
 command -v jq >/dev/null 2>&1 || { err "jq not found"; exit 2; }
