@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# d031-claim-next-ready.sh — ADR-0038 §Layer 2 regression test (10 TCs).
+# d031-claim-next-ready.sh — ADR-0038 §Layer 2 regression test (14 TCs).
 #
 # Replaces scripts/tests/d031-claim-next-ready-stub.sh (Issue #276 STUB coverage,
 # retired per Issue #537 Sprint 15 P2 drift remediation — arch verdict Option B).
@@ -7,7 +7,7 @@
 # `gh` binary that returns canned JSON for list/view calls and records
 # edit/comment calls to a log the test can inspect.
 #
-# 10 TCs (per docs/backlog/STORY-019.md, Issue #520 AC4 + ADR-0044 RED-first TDD):
+# 14 TCs (per docs/backlog/STORY-019.md, Issue #520 AC4 + ADR-0044 RED-first TDD + Issue #1231 amendment):
 #   TC1: 3 ready items P0/P1/P2 → claim P0 first (priority sort, issue-level)
 #   TC2: 2 ready items same priority, different ages → claim oldest (age tie-break, issue-level)
 #   TC3: ready item with open dep → skip; another without dep → claim (dep parser, issue-level)
@@ -16,8 +16,12 @@
 #   TC6: NEW ready=0 work-stream negative (sister-pattern to d058 TC6)
 #   TC7: NEW dep work-stream filter (sister-pattern to d058 TC9)
 #   TC8: usage error (no role arg) → exit 2
-#   TC9: invalid role → exit 2
-#   TC10: audit log written on claim
+#   TC9: NEW Issue #1027 RETRO-024 silent-skip (work-done-elsewhere terminal state — no claim)
+#   TC10: NEW Issue #1027 RETRO-024 silent-skip detection (cross-repo sister-PR terminal state)
+#   TC11: NEW Issue #1041 ROLLBACK flip-not-applied (post-flip verify fails → exit 6)
+#   TC12: NEW Issue #1041 ROLLBACK wip-over-cap-post-flip (search-index caught up > cap → exit 7)
+#   TC13: invalid role → exit 2 (was TC9)
+#   TC14: audit log written on claim (was TC10)
 #
 # Sister-pattern to d058-claim-wip-workstream.sh (9 TCs, post-PR #511).
 # Work-stream awareness per ADR-0038 §Work-Stream Awareness amendment (PR #504 squash).
@@ -86,13 +90,29 @@ case "$*" in
     ;;
   *"status:in-progress"*)
     # Return JSON array (matches `gh issue list --json number` output).
-    case "${FAKE_WIP_COUNT:-0}" in
-      0) echo '[]' ;;
-      1) echo '[{"number":900}]' ;;
-      2) echo '[{"number":900},{"number":901}]' ;;
-      3) echo '[{"number":900},{"number":901},{"number":902}]' ;;
-      *) echo '[]' ;;
-    esac
+    # State tracking: first query = pre-flip WIP cap check (return FAKE_WIP_COUNT
+    # items). Subsequent queries = post-flip re-query (if FAKE_POST_FLIP_OVERCAP=1,
+    # return 4 items > WIP_LIMIT to trigger ROLLBACK path 2).
+    state_file="${FAKE_LOG_PATH:-/tmp/fake-gh.log}.wipq.count"
+    wipq_count=0
+    if [ -f "$state_file" ]; then
+      wipq_count="$(cat "$state_file" 2>/dev/null || echo 0)"
+    fi
+    wipq_count=$((wipq_count + 1))
+    echo "$wipq_count" > "$state_file"
+    if [ "$wipq_count" -gt 1 ] && [ "${FAKE_POST_FLIP_OVERCAP:-0}" = "1" ]; then
+      # Post-flip re-query: simulate search-index caught up > WIP_LIMIT (Issue #1041 path 2).
+      echo '[{"number":900},{"number":901},{"number":902},{"number":903}]'
+    else
+      # Pre-flip (or normal post-flip): return FAKE_WIP_COUNT items.
+      case "${FAKE_WIP_COUNT:-0}" in
+        0) echo '[]' ;;
+        1) echo '[{"number":900}]' ;;
+        2) echo '[{"number":900},{"number":901}]' ;;
+        3) echo '[{"number":900},{"number":901},{"number":902}]' ;;
+        *) echo '[]' ;;
+      esac
+    fi
     ;;
   *"status:ready"*)
     if [ -s "${FAKE_READY_FILE:-/dev/null}" ]; then
@@ -102,12 +122,28 @@ case "$*" in
     fi
     ;;
   *"issue view "*)
-    # Return just the state value (matches what the script's `gh -q .state` would extract).
+    # Return the per-issue JSON. Three modes (via FAKE_FLIP_FAIL):
+    #   0 (default): labels include status:in-progress (per-issue view confirms flip)
+    #   1:           labels do NOT include status:in-progress (Issue #1041 ROLLBACK path 1)
+    #   2:           labels include status:in-progress (post-recovery, normal)
     n=$(echo "$*" | awk '{for(i=1;i<=NF;i++) if($i=="view") {print $(i+1); exit}}')
-    if [ "$n" = "${FAKE_DEP_OPEN_N:-}" ]; then
-      echo "open"
+    # Return state value for dep-check calls (gh -q .state)
+    if echo "$*" | grep -q '\.state'; then
+      if [ "$n" = "${FAKE_DEP_OPEN_N:-}" ]; then
+        echo "open"
+      else
+        echo "closed"
+      fi
     else
-      echo "closed"
+      # Return labels for verify_post_flip (gh --json labels --jq '.labels[].name')
+      if [ "${FAKE_FLIP_FAIL:-0}" = "1" ]; then
+        # Issue #1041 ROLLBACK path 1: per-issue view does NOT have status:in-progress
+        echo 'priority:P0'
+      else
+        echo 'status:in-progress'
+        echo 'priority:P0'
+        echo 'agent:developer'
+      fi
     fi
     ;;
   *"pr list"*"Closes"*)
@@ -161,12 +197,15 @@ run_claim() {
   # Use `env` explicitly to pass all required env vars to the subshell.
   # (Plain `VAR=val cmd` assignments don't survive `$(...)` command substitution
   # reliably with line continuations; `env` makes this explicit and correct.)
+  # Extra env vars (after 5 positional args) propagate to fake-gh for Issue #1041 ROLLBACK paths.
   CLAIM_OUT="$(env \
     FAKE_WIP_COUNT="$wip_count" \
     FAKE_READY_FILE="$gh_path.ready.json" \
     FAKE_CLUSTERS_FILE="$gh_path.clusters.json" \
     FAKE_DEP_OPEN_N="$dep_open_n" \
     FAKE_LOG_PATH="$log_path" \
+    FAKE_FLIP_FAIL="${FAKE_FLIP_FAIL_OVERRIDE:-0}" \
+    FAKE_POST_FLIP_OVERCAP="${FAKE_POST_FLIP_OVERCAP_OVERRIDE:-0}" \
     PATH="$fake_bin:$PATH" \
     GITHUB_REPO="test-owner/test-repo" \
     AUTO_CLAIM_LOG_DIR="$TEST_TMPDIR/logs" \
@@ -314,7 +353,99 @@ else
 fi
 
 # ============================================================================
-section "TC9: invalid role → exit 2"
+# TC9 (Issue #1027 RETRO-024 silent-skip on work-done-elsewhere)
+# Work-done-elsewhere terminal state: status:ready + cc:human + NO agent:*
+# Per RETRO-024 + Issue #1027, these items MUST be silently filtered from claim
+# candidates. Test setup: ready JSON includes 1 work-done-elsewhere item + 1
+# normal ready item. Expected: claim the normal item, NOT the work-done one.
+# ============================================================================
+section "TC9: Issue #1027 RETRO-024 silent-skip (work-done-elsewhere filtered)"
+ready='[
+  {"number":500,"title":"work-done-elsewhere (status:ready + cc:human + no agent:*)","createdAt":"2026-06-22T08:00:00Z","labels":[{"name":"status:ready"},{"name":"cc:human"}],"body":""},
+  {"number":501,"title":"normal ready item","createdAt":"2026-06-22T09:00:00Z","labels":[{"name":"priority:P1"},{"name":"status:ready"},{"name":"agent:developer"}],"body":""}
+]'
+run_claim developer 0 "$ready" ""
+if [ "$CLAIM_RC" = "0" ] && echo "$CLAIM_OUT" | grep -q "claimed #501"; then
+  if grep -q "EDIT .* 500" "$CLAIM_LOG" 2>/dev/null; then
+    fail "RETRO-024 silent-skip MISSED — script tried to claim #500 (work-done-elsewhere)" "silent-skip filter bypassed"
+  else
+    pass "RETRO-024 silent-skip honored: work-done-elsewhere #500 filtered, normal #501 claimed"
+  fi
+elif [ "$CLAIM_RC" = "0" ] && echo "$CLAIM_OUT" | grep -q "claimed #500"; then
+  fail "RETRO-024 silent-skip MISSED — claimed #500 (work-done-elsewhere)" "should have skipped #500 (cc:human + no agent:*)"
+else
+  fail "RETRO-024 silent-skip path not handled as expected" "rc=$CLAIM_RC out=$CLAIM_OUT"
+fi
+
+# ============================================================================
+# TC10 (Issue #1027 RETRO-024 silent-skip when ALL ready items are work-done-elsewhere)
+# All ready items are work-done-elsewhere → no claim candidates left after filter.
+# Expected: exit 1 (no ready items) + silent_skip log entry in auto-claim.log
+# per lens (d) + TD-016/020 family observability.
+# ============================================================================
+section "TC10: Issue #1027 RETRO-024 all-items-work-done-elsewhere (silent-skip log entry)"
+ready='[
+  {"number":600,"title":"work-done-elsewhere A","createdAt":"2026-06-22T08:00:00Z","labels":[{"name":"status:ready"},{"name":"cc:human"}],"body":""},
+  {"number":601,"title":"work-done-elsewhere B","createdAt":"2026-06-22T09:00:00Z","labels":[{"name":"status:ready"},{"name":"cc:human"}],"body":""}
+]'
+run_claim developer 0 "$ready" ""
+audit_log="$TEST_TMPDIR/logs/auto-claim.log"
+if [ "$CLAIM_RC" = "1" ] && echo "$CLAIM_OUT" | grep -q "no ready items"; then
+  if [ -f "$audit_log" ] && grep -q "work-done-elsewhere-silent-skip" "$audit_log"; then
+    pass "RETRO-024 all-work-done-elsewhere: exit 1 + silent-skip log entry written"
+  else
+    fail "RETRO-024 silent-skip log entry missing" "expected 'work-done-elsewhere-silent-skip' in $audit_log"
+  fi
+else
+  fail "RETRO-024 all-work-done-elsewhere path not honored" "expected exit 1 + 'no ready items'; got rc=$CLAIM_RC out=$CLAIM_OUT"
+fi
+
+# ============================================================================
+# TC11 (Issue #1041 ROLLBACK path 1: per-issue view missing status:in-progress)
+# Pre: ready item available. Per-issue view FAKE_FLIP_FAIL=1 returns labels
+# WITHOUT status:in-progress. Expected: ROLLBACK flip-not-applied → exit 6
+# + audit log ROLLBACK entry.
+# ============================================================================
+section "TC11: Issue #1041 ROLLBACK flip-not-applied (per-issue view missing)"
+ready='[
+  {"number":700,"title":"P0 flip-fail candidate","createdAt":"2026-06-22T08:00:00Z","labels":[{"name":"priority:P0"},{"name":"status:ready"},{"name":"agent:developer"}],"body":""}
+]'
+FAKE_FLIP_FAIL_OVERRIDE=1 run_claim developer 0 "$ready" ""
+audit_log="$TEST_TMPDIR/logs/auto-claim.log"
+if [ "$CLAIM_RC" = "6" ] && echo "$CLAIM_OUT" | grep -q "ROLLBACK: #700"; then
+  if [ -f "$audit_log" ] && grep -q "ROLLBACK #700 (flip-not-applied)" "$audit_log"; then
+    pass "Issue #1041 ROLLBACK path 1: exit 6 + ROLLBACK audit log entry"
+  else
+    fail "Issue #1041 ROLLBACK audit log entry missing" "expected 'ROLLBACK #700 (flip-not-applied)' in $audit_log"
+  fi
+else
+  fail "Issue #1041 ROLLBACK path 1 not honored" "expected exit 6 + 'ROLLBACK: #700'; got rc=$CLAIM_RC out=$CLAIM_OUT"
+fi
+
+# ============================================================================
+# TC12 (Issue #1041 ROLLBACK path 2: search-index caught up > WIP_LIMIT post-flip)
+# Pre: ready item available. Per-issue view confirms flip (FAKE_FLIP_FAIL=0).
+# Post-flip search-index returns > WIP_LIMIT items (FAKE_POST_FLIP_OVERCAP=1).
+# Expected: ROLLBACK wip-over-cap-post-flip → exit 7 + audit log ROLLBACK entry.
+# ============================================================================
+section "TC12: Issue #1041 ROLLBACK wip-over-cap-post-flip (search-index > WIP_LIMIT)"
+ready='[
+  {"number":810,"title":"P0 over-cap candidate","createdAt":"2026-06-22T08:00:00Z","labels":[{"name":"priority:P0"},{"name":"status:ready"},{"name":"agent:developer"}],"body":""}
+]'
+FAKE_POST_FLIP_OVERCAP_OVERRIDE=1 run_claim developer 1 "$ready" ""
+audit_log="$TEST_TMPDIR/logs/auto-claim.log"
+if [ "$CLAIM_RC" = "7" ] && echo "$CLAIM_OUT" | grep -q "ROLLBACK: #810"; then
+  if [ -f "$audit_log" ] && grep -q "ROLLBACK #810 (wip-over-cap-post-flip" "$audit_log"; then
+    pass "Issue #1041 ROLLBACK path 2: exit 7 + ROLLBACK audit log entry"
+  else
+    fail "Issue #1041 ROLLBACK path 2 audit log entry missing" "expected 'ROLLBACK #810 (wip-over-cap-post-flip' in $audit_log"
+  fi
+else
+  fail "Issue #1041 ROLLBACK path 2 not honored" "expected exit 7 + 'ROLLBACK: #810'; got rc=$CLAIM_RC out=$CLAIM_OUT"
+fi
+
+# ============================================================================
+section "TC13: invalid role → exit 2 (was TC9)"
 run_claim invalid-role 0 "EMPTY" ""
 if [ "$CLAIM_RC" = "2" ] && echo "$CLAIM_OUT" | grep -q "invalid role"; then
   pass "invalid role → exit 2 + 'invalid role' message"
@@ -323,7 +454,7 @@ else
 fi
 
 # ============================================================================
-section "TC10: audit log written on claim (TC1 follow-up)"
+section "TC14: audit log written on claim (TC1 follow-up, was TC10)"
 # The script writes to $AUTO_CLAIM_LOG_DIR/auto-claim.log (not appended with
 # repo name when AUTO_CLAIM_LOG_DIR is set, per impl §repo_name branch).
 audit_log="$TEST_TMPDIR/logs/auto-claim.log"
@@ -349,5 +480,5 @@ if [ "$FAIL" -gt 0 ]; then
   exit 1
 fi
 echo
-echo "d031 REGRESSION PASS — claim-next-ready.sh (ADR-0038 §Layer 2) contract honored. 10/10 TCs green."
+echo "d031 REGRESSION PASS — claim-next-ready.sh (ADR-0038 §Layer 2) contract honored. 14/14 TCs green (includes Issue #1027 RETRO-024 silent-skip TC9-TC10 + Issue #1041 ROLLBACK TC11-TC12 per Issue #1231 amendment)."
 exit 0

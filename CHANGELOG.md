@@ -16,6 +16,7 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - **Impl (row 014)**: `scripts/claim-next-ready.sh` (UNCHANGED — pure byte-equivalence parity attestation net 0-line delta). Sprint 33 amendments embedded: CLAIM_NEXT_READY_LOCK_FILE env var override (cycle ~#3853 TC1 env-rot fix) + RETRO-024 silent-skip on work-done-elsewhere terminal state (cycle ~#3968Q+214 status-only atomic). Both already byte-equivalent to template since Sprint 33.
 - **d-test registry**: `scripts/tests/INDEX.md` row 014 entry appended (14th sister — rows 001-013 SHIPPED + row 014 cycle ~#723 dispatch).
 - **Branch**: dev/s34-002-row-014 from tmpl-official/main 55cb3dc POST-#217-squash per cycle ~#3968Q+311+8 CONDITIONAL preventive.
+- **d031 sister-test expansion (cycle ~#3968Q+847 OWNER OVERRIDE)**: `scripts/tests/d031-claim-next-ready.sh` expanded 10 → 14 TCs INSIDE PR #219 (NOT separate PR per arch 308th-wake cycle ~#3968Q+731 ratification). New TCs: TC9 Issue #1027 RETRO-024 silent-skip (work-done-elsewhere filtered), TC10 Issue #1027 silent-skip log entry (all-work-done-elsewhere), TC11 Issue #1041 ROLLBACK flip-not-applied (exit 6), TC12 Issue #1041 ROLLBACK wip-over-cap-post-flip (exit 7). Renumbered old TC9/TC10 → TC13/TC14. verify-locally 14/14 GREEN post-amend per cycle ~#3893Q v2. 5-file atomic per ADR-0055 §1 (impl + d-s34-002-row-014 + d031 + INDEX.md + CHANGELOG.md).
 
 ### Notes — Sprint 34 W4 forward-port S34-002 row 014
 
