@@ -4,7 +4,22 @@ name: Label Check (ADR-0012)
 #   - type:*     (one of: vision, feature, bug, docs, chore, refactor, incident)
 #   - status:*   (one of: backlog, ready, in-progress, in-review, blocked, done)
 #   - agent:*    (one of: orchestrator, product-manager, architect, developer, tester, human)
-#   - cc:*       (one of: orchestrator, product-manager, architect, developer, tester)
+#   - cc:*       (one of: orchestrator, product-manager, architect, developer, tester, human)
+#
+# Layer 3 (added 2026-06-21, Issue #213 TEST-WAKE-ENFORCE Layer 3, ADR-0012
+# §Type-driven invariants): for PRs with `type:bug`, additionally enforce
+#   - cc:tester
+#   - needs-tester-signoff
+# These are correctness-bearing labels for bug-fix PRs; without them the PR
+# can sit in `status:ready` with zero reviewer verdicts (the silent-skip gap
+# observed on PR #212 / Issue #213).
+#
+# Owner-override: for `type:bug` PRs only, the owner may skip the cc:tester +
+# needs-tester-signoff requirement with **explicit rationale in the PR body**
+# (e.g. "emergency hotfix, CI gate enforces test coverage separately"). This
+# CI workflow does not parse the PR body; the audit trail is the PR body +
+# comment thread (per ADR-0012 §Owner override). Owner-override is parallel
+# to the broader doctrine in ADR-0031.
 #
 # If any category is missing, the workflow comments on the issue/PR listing
 # exactly which categories are missing (idempotent — replaces its own previous
@@ -17,20 +32,25 @@ on:
   issues:
     types: [opened, reopened, labeled, unlabeled]
   pull_request_target:
-    types: [opened, reopened, labeled, unlabeled]
+    types: [opened, reopened, labeled, unlabeled, closed]
 
 permissions:
   issues: write
   pull-requests: write
+
+# Layer 4 (Issue #423, ADR-0012 §Cascade-strip scope-tightening Part 1):
+# serialize concurrent label/unlabel events per PR/issue so the duplicate-removal
+# logic doesn't race against itself (tester blocker Q3). cancel-in-progress: false
+# means an in-flight run completes; a new run starts only after it.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
 
 jobs:
   label-check:
     runs-on: [self-hosted, Linux, X64, atilcan]
     steps:
       - name: Verify required label categories
-        # SHA-pinned per ADR-0027 §Threat model + ADR-0043 §lens (h).
-        # Sister-pattern: atilcan65/AtilCalculator label-check.yml:54,178,243
-        # (all using the same v7 SHA for defense in depth).
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
         env:
           MARKER: "<!-- adr-0012-label-check -->"
@@ -41,13 +61,28 @@ jobs:
             const target = isPR ? context.payload.pull_request : context.payload.issue;
             const number = target.number;
             const labels = (target.labels || []).map(l => (typeof l === 'string' ? l : l.name));
+            // Declared EARLY (before any usage in early-return template literal) — TDZ discipline
+            // (fix for PR #672 regression: ReferenceError on closed items when ${kind} used at L14
+            // but `const kind` declared at L35). Sister-pattern to Layer 5 / cascade-strip TDZ-safe
+            // declarations (cyle ~972 P0 fix).
+            const kind = isPR ? 'PR' : 'Issue';
+
+            // ADR-0015 §3 closed-state bypass — sister-pattern to cascade-strip (L267) + Layer 5 (L393)
+            // Skips closed issues + closed/merged PRs to align workflow behavior with the ADR claim
+            // that "Label Check workflow kapalı (closed) issue'ları ignore eder, bu bypass güvenlidir".
+            // Regression guard: scripts/tests/d076-label-check-state-filter.sh (refs #670).
+            // TDZ fix follow-up: TC7 in d076 covers runtime execution on closed items.
+            if (target.state === 'closed') {
+              core.info(`silent_skip event=closed-state kind=${kind} number=${number} adr=ADR-0015-§3 message="Skipping ${kind} #${number} — closed state, ADR-0015 §3 bypass"`);
+              return;
+            }
 
             // Recognised label sets — keep in sync with scripts/bootstrap-labels.sh
             const required = {
               'type:':   ['vision','feature','bug','docs','chore','refactor','incident'],
               'status:': ['backlog','ready','in-progress','in-review','blocked','done'],
               'agent:':  ['orchestrator','product-manager','architect','developer','tester','human'],
-              'cc:':     ['orchestrator','product-manager','architect','developer','tester'],
+              'cc:':     ['orchestrator','product-manager','architect','developer','tester','human'],
             };
 
             const present = {};
@@ -60,7 +95,6 @@ jobs:
               }
             }
 
-            const kind = isPR ? 'PR' : 'Issue';
             core.info(`${kind} #${number} labels: ${labels.join(', ') || '(none)'}`);
             core.info(`Present per category: ${JSON.stringify(present)}`);
 
@@ -121,3 +155,823 @@ jobs:
             }
 
             core.setFailed(`${kind} #${number} missing required label categor${missing.length === 1 ? 'y' : 'ies'}: ${missing.map(m => m.prefix + '*').join(', ')}`);
+
+      # Layer 3 (Issue #213 TEST-WAKE-ENFORCE + Issue #227 RCA-20 fix + TD-022):
+      # Auto-Verdict-By hook (ADR-0024 amendment §Path 1, Issue #681)
+      # -----------------------------------------------------------------
+      # When ANY agent (or Layer 5) adds a `cc:*` label, atomic-pair with
+      # `verdict-by:<ts>` (default deadline = +24h, configurable via
+      # VERDICT_BY_DEFAULT_HOURS env var). Sister to scripts/peer-poke.sh
+      # Path 2 (layered defense per ADR-0024 amendment §Path D).
+      #
+      # Doctrinal contract (d-test d081-auto-verdict-by-hook.sh):
+      #   TC1: Layer 5 addLabel call referencing verdict-by in github-script
+      #   TC3: atomic pairing — paired cc:* + verdict-by:* in same addLabels call
+      #   TC4: VERDICT_BY_DEFAULT_HOURS env var (default 24)
+      #   TC5: verdict-by-specific silent-skip idempotency guard
+      #
+      # Action filter: only `labeled` events with cc:* prefix trigger. The
+      # webhook fires once per label-add; idempotency check inside the
+      # script prevents double-deadline overwrites.
+      - name: Auto-Verdict-By hook (ADR-0024 amendment §Path 1)
+        if: github.event_name == 'pull_request_target' && github.event.action == 'labeled' && startsWith(github.event.label.name, 'cc:')
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
+        env:
+          MARKER: "<!-- adr-0024-auto-verdict-by -->"
+          VERDICT_BY_DEFAULT_HOURS: ${{ vars.VERDICT_BY_DEFAULT_HOURS || '24' }}
+        with:
+          script: |
+            const marker = process.env.MARKER;
+            const hours = parseInt(process.env.VERDICT_BY_DEFAULT_HOURS || '24', 10);
+            const isPR = !!context.payload.pull_request;
+            const target = isPR ? context.payload.pull_request : context.payload.issue;
+            const number = target.number;
+            // FIX (Issue #713, PR #712 LIVE INSTANCE): `context.event` is the event NAME
+            // string (e.g. 'pull_request_target'), NOT the payload. The correct accessor
+            // for the trigger label is `context.payload.label.name` (or equivalently
+            // `github.event.label.name`, since `github.event` aliases the payload).
+            // Sister-pattern to L495 (`context.payload.label && context.payload.label.name`).
+            const peerLabel = context.payload.label.name;  // e.g. "cc:developer"
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // TC5: idempotency — silent-skip if verdict-by:* already present
+            const { data: existingIssue } = await github.rest.issues.get({
+              owner, repo, issue_number: number,
+            });
+            const existingLabels = (existingIssue.labels || []).map(l => (typeof l === 'string' ? l : l.name));
+            if (existingLabels.some(l => l && l.startsWith('verdict-by:'))) {
+              core.info(`silent_skip event=verdict-by-already-present number=${number} peer=${peerLabel} message="#${number} already has verdict-by label, skipping auto-pair"`);
+              return;
+            }
+
+            // TC4: default deadline = now + VERDICT_BY_DEFAULT_HOURS hours
+            const deadline = new Date(Date.now() + hours * 3600 * 1000).toISOString().replace(/\.\d{3}Z$/, 'Z');
+            const verdictByLabel = `verdict-by:${deadline}`;
+
+            // TC3: atomic — paired addLabel in same invocation (cc:* + verdict-by:*)
+            await github.rest.issues.addLabels({
+              owner, repo, issue_number: number,
+              labels: [peerLabel, verdictByLabel],
+            });
+
+            core.info(`Auto-paired ${peerLabel} + ${verdictByLabel} on #${number} (deadline +${hours}h, ADR-0024 amendment §Path 1)`);
+
+      # type-driven invariants for `type:bug` PRs (cc:tester + needs-tester-signoff).
+      #
+      # Action filter (TD-022, ADR-0035 retrofitted): only fire on `opened` or
+      # `reopened` events. Without this filter, Layer 3 also fires on
+      # `labeled`/`unlabeled` events on already-open PRs, causing CI RED on
+      # otherwise-correct PRs (e.g. PR #245 closed 2026-06-22T10:39:53Z as
+      # redundant — owner removed cc:tester + needs-tester-signoff when
+      # flipping to status:ready, triggering Layer 3 on a label-change event
+      # even though the PR was being closed as no-op).
+      #
+      # Trade-off: this filter does NOT catch label-removal attacks (rare).
+      # If `cc:tester`/`needs-tester-signoff` are removed on an open PR after
+      # the initial open event, Layer 3 won't re-fire. Mitigation: the
+      # stale-verdict watchdog (ADR-0024) catches stale `verdict-by:<ts>`
+      # labels, and the watcher loop's `processed_event_ids` dedup prevents
+      # silent-skip gaps. Owner-override on label removal is acceptable per
+      # ADR-0031.
+      #
+      # Skipped for issues per ADR-0012 §Interaction example 3.
+      # Owner-override via PR body rationale documented in comment but not
+      # parsed by this workflow (per ADR-0012 §Owner override).
+      - name: Layer 3 — type:bug requires cc:tester + needs-tester-signoff
+        if: github.event_name == 'pull_request_target' && (github.event.action == 'opened' || github.event.action == 'reopened')
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
+        env:
+          MARKER: "<!-- adr-0012-type-driven -->"
+        with:
+          script: |
+            const marker = process.env.MARKER;
+            const pr = context.payload.pull_request;
+            const number = pr.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            // Issue #819 fix (sister-pattern to Layer 5 j.4): read fresh PR labels via
+            // GitHub API instead of the stale webhook snapshot. The webhook payload is
+            // frozen at fire time (PR #817 LIVE INSTANCE 2026-07-04T11:06Z, cmt 4881737089)
+            // so any subsequent label mutation is invisible without an API re-fetch.
+            // Non-label fields (state, draft, number) still come from the webhook object.
+            const { data: freshPR } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            const labels = (freshPR.labels || []).map(l => (typeof l === 'string' ? l : l.name));
+
+            // Layer 3 only fires for `type:bug` PRs.
+            if (!labels.includes('type:bug')) {
+              core.info(`silent_skip event=non-type-bug layer=3 number=${number} message="PR #${number} is not type:bug; Layer 3 type-driven check skipped."`);
+              return;
+            }
+
+            // Required additional labels for type:bug PRs.
+            const requiredExtra = ['cc:tester', 'needs-tester-signoff'];
+            const missingExtra = requiredExtra.filter(l => !labels.includes(l));
+
+            // Find existing bot comment by marker (separate from the 4-cat check)
+            const { data: comments } = await github.rest.issues.listComments({
+              owner, repo, issue_number: number, per_page: 100,
+            });
+            const existing = comments.find(c =>
+              c.user && c.user.type === 'Bot' && c.body && c.body.includes(marker)
+            );
+
+            if (missingExtra.length === 0) {
+              // Success — clean up any prior failure comment, exit green
+              if (existing) {
+                const body = `${marker}\n✅ **Layer 3 type-driven check passed (ADR-0012).** \`type:bug\` PR carries \`cc:tester\` + \`needs-tester-signoff\`.`;
+                await github.rest.issues.updateComment({
+                  owner, repo, comment_id: existing.id, body,
+                });
+              }
+              core.info(`✅ Layer 3 type-driven check passed on PR #${number}.`);
+              return;
+            }
+
+            // Build failure comment
+            const lines = [
+              marker,
+              `### ❌ Layer 3 type-driven check failed (ADR-0012, Issue #213)`,
+              ``,
+              `This PR is \`type:bug\` and is **missing ${missingExtra.length === 1 ? 'label' : 'labels'}** required for correctness-bearing bug fixes:`,
+              ``,
+              `| Required label | Status |`,
+              `|---|---|`,
+              ...requiredExtra.map(l => {
+                const ok = labels.includes(l);
+                const status = ok ? `✅ \`${l}\`` : `❌ **missing**`;
+                return `| \`${l}\` | ${status} |`;
+              }),
+              ``,
+              `**Why this is required**: per [ADR-0012 §Type-driven invariants](../blob/main/docs/decisions/ADR-0012-required-label-set.md) (amended 2026-06-21, [Issue #213](https://github.com/atilcan65/AtilCalculator/issues/213)), \`type:bug\` PRs MUST have \`cc:tester\` + \`needs-tester-signoff\` at open. Without these labels, the PR can sit in \`status:ready\` for hours with **zero reviewer verdicts** — the silent-skip gap that caused the Sprint 4 RCA chain (#213 → PR #212 / #215).`,
+              ``,
+              `**Fix**: \`gh pr edit ${number} --add-label "${missingExtra.join('" --add-label "')}"\``,
+              ``,
+              `**Owner override** (per ADR-0012 §Owner override + ADR-0031): if this is an emergency hotfix and the CI gate enforces test coverage separately, the owner may add **explicit rationale in the PR body** (e.g. "emergency hotfix, CI gate enforces test coverage separately"). This CI workflow does not parse the PR body; the audit trail is the PR body + this comment thread.`,
+              ``,
+              `This check re-runs on every label change, so it will turn green automatically once the missing labels are added.`,
+            ];
+
+            const body = lines.join('\n');
+
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number: number, body,
+              });
+            }
+
+            core.setFailed(`PR #${number} (type:bug) missing required label(s): ${missingExtra.join(', ')} per ADR-0012 §Type-driven invariants.`);
+
+      # Layer 4 (ADR-0012 §Cascade-strip scope-tightening Part 1, Issue #423):
+      # doctrinal anchor: ADR-0012 (PR #418 amend, PR #424 clarification MERGED).
+      # scope-tightened duplicate status:* removal. Preserves reviewer chain.
+      - name: Layer 4 — scope-tightened duplicate status:* removal
+        if: github.event_name == 'pull_request_target' || github.event_name == 'issues'
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
+        env:
+          MARKER: "<!-- adr-0012-cascade-strip-tightening -->"
+        with:
+          script: |
+            const marker = process.env.MARKER;
+            const isPR = !!context.payload.pull_request;
+            const target = isPR ? context.payload.pull_request : context.payload.issue;
+            const number = target.number;
+            const issueState = target.state;
+
+            // Q5b: early-return on closed PR/issue (frozen state, no-op)
+            if (issueState === 'closed') {
+              core.info(`cascade_strip event=closed-state number=${number} message="PR/Issue #${number} is closed; cascade-strip no-op."`);
+              return;
+            }
+
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Current labels on the issue/PR
+            const currentLabels = (target.labels || []).map(l => (typeof l === 'string' ? l : l.name));
+
+            // Collect status:* labels currently present
+            const currentStatusLabels = currentLabels.filter(l => l.startsWith('status:'));
+
+            // Q5a: fail-check for 3+ status:* labels (ADR-0012 mutual exclusion violation)
+            if (currentStatusLabels.length > 2) {
+              const errBody = `${marker}\n❌ **Cascade-strip fail-check (ADR-0012 §Mutual exclusion)**: ${currentStatusLabels.length} status:* labels detected (${currentStatusLabels.join(', ')}). Only 1 canonical status per issue/PR. Manual intervention required.`;
+              const { data: errComments } = await github.rest.issues.listComments({ owner, repo, issue_number: number, per_page: 100 });
+              const errExisting = errComments.find(c => c.user && c.user.type === 'Bot' && c.body && c.body.includes(marker + '-error'));
+              if (errExisting) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: errExisting.id, body: errBody });
+              } else {
+                await github.rest.issues.createComment({ owner, repo, issue_number: number, body: errBody });
+              }
+              core.setFailed(`ADR-0012 §Mutual exclusion violation: ${currentStatusLabels.length} status:* labels on #${number}`);
+              return;
+            }
+
+            if (currentStatusLabels.length <= 1) {
+              core.info(`cascade_strip event=no-duplicates number=${number} status_count=${currentStatusLabels.length} message="PR/Issue #${number} has ≤1 status:* labels; cascade-strip not needed."`);
+              return;
+            }
+
+            // Q1: get createdAt from /events endpoint with LabeledEvent filter
+            const events = await github.paginate(github.rest.issues.listEvents, {
+              owner, repo, issue_number: number, per_page: 100
+            });
+            const earliestByName = new Map();
+            for (const ev of events) {
+              if (ev.event === 'labeled' && ev.label && ev.label.name && ev.label.name.startsWith('status:')) {
+                const name = ev.label.name;
+                const ts = new Date(ev.created_at).getTime();
+                if (!earliestByName.has(name) || earliestByName.get(name) > ts) {
+                  earliestByName.set(name, ts);
+                }
+              }
+            }
+
+            // Sort by earliest application time, oldest wins (arch's createdAt sort clarification)
+            // D1 deviation: RHS variable `earliestByCreated` in peer-reviewed cmt 4808221671 line 67
+            //   was a typo for `earliestByName`. Fixed 1 char to match the LHS Map. See PR §Deviations D1.
+            const sortedByCreated = currentStatusLabels.sort((a, b) => earliestByName.get(a) - earliestByName.get(b));
+            const primary = sortedByCreated[0];
+            const duplicates = sortedByCreated.slice(1);
+
+            core.info(`cascade_strip event=duplicates-detected number=${number} status_count=${currentStatusLabels.length} primary=${primary} duplicates="${duplicates.join(',')}" message="PR/Issue #${number} has ${currentStatusLabels.length} status:* labels. Primary (oldest): ${primary}, duplicates: ${duplicates.join(', ')}"`);
+
+            // Remove duplicates only — preserve primary + all cc:* + needs-*-signoff + agent:*
+            const removed = [];
+            for (const dup of duplicates) {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number: number, name: dup });
+              removed.push(dup);
+              core.info(`cascade_strip event=duplicate-removed number=${number} removed=${dup} primary=${primary} message="Removed duplicate status:* label: ${dup} (primary ${primary} preserved)"`);
+            }
+
+            // Q2 audit-trail idempotency: edit existing marker comment if present, else create
+            const auditBody = [
+              marker,
+              '**Cascade-strip scope-tightening applied (Layer 4)**',
+              '',
+              `- **Trigger**: \`${context.eventName || context.event_name}\` event, action=\`${context.payload.action || '(batch)'}\`, label=\`${context.payload.label?.name || '(batch)'}\``,
+              `- **Status labels observed**: \`${currentStatusLabels.join(', ')}\``,
+              `- **Primary (preserved)**: \`${primary}\` (oldest application by createdAt)`,
+              `- **Removed**: \`${removed.join(', ')}\` (newer than primary)`,
+              `- **Preserved**: all \`cc:*\`, \`needs-*-signoff\`, \`agent:*\` (NOT touched per ADR-0012 §Cascade-strip)`,
+              `- **Workflow run**: \`${{ github.run_id }}\``,
+              `- **ADR**: \`docs/decisions/ADR-0012-required-label-set.md\` §Cascade-strip scope-tightening Part 1`,
+            ].join('\n');
+
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number: number, per_page: 100 });
+            const existing = comments.find(c => c.user && c.user.type === 'Bot' && c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: auditBody });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: number, body: auditBody });
+            }
+
+            core.info(`cascade_strip event=scope-tightened-success number=${number} removed_count=${removed.length} message="✅ Cascade-strip scope-tightened on #${number}."`);
+
+      # Layer 5 (Issue #425 AC #4, ADR-0048, docs PR #430 + ADR #431): status:ready
+      # auto-add gating by type-driven reviewer chain. Closes PR #393 root-cause
+      # variant (premature status:ready on arch verdict alone for non-docs PRs).
+      #
+      # Per ADR-0012 §Cascade-strip scope-tightening Part 2 + ADR-0048:
+      #   - type:docs PRs (agent:architect|product-manager|orchestrator): arch/PM/orch
+      #     verdict sufficient (ADR-0021 docs PR convention).
+      #   - Non-docs (type:bug, type:feature, type:refactor, type:chore, type:incident):
+      #     needs-tester-signoff MUST be cleared by tester APPROVED verdict.
+      #   - Unknown type: defensive default to non-docs path (tester prereq).
+      #
+      # Atomic transition (sister-pattern to PR #428): removeLabel('status:in-review')
+      # FIRST, then addLabel('status:ready'). gh batches into one PATCH.
+      #
+      # Reversal handler (TC4): if needs-tester-signoff is re-added AFTER tester
+      # APPROVED (e.g. dev pushes new commit, tester re-rejects), removeLabel
+      # ('status:ready'). Sister-pattern: PR #426 Layer 4 (concurrency block, marker
+      # pattern, idempotent bot-attributed comments).
+      - name: Layer 5a fresh-label read + state check + early-return guards
+        if: github.event_name == 'pull_request_target'
+        id: layer5a
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
+        env:
+          MARKER_SKIP: "<!-- adr-0012-status-ready-gating-skip -->"
+          MARKER_REVERSAL: "<!-- adr-0012-status-ready-gating-reversal -->"
+        with:
+          script: |
+            const markerSkip = process.env.MARKER_SKIP;
+            const markerReversal = process.env.MARKER_REVERSAL;
+            const pr = context.payload.pull_request;
+            const number = pr.number;
+            const issueState = pr.state;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            // Issue #819 fix: read fresh PR labels via GitHub API instead of the stale
+            // webhook snapshot. The webhook payload is frozen at fire time (PR #817 LIVE
+            // INSTANCE 2026-07-04T11:06Z, cmt 4881737089) so subsequent label mutations
+            // (e.g. auto-verdict-by hook) are invisible without an API re-fetch. Fresh
+            // API fetch via pulls.get replaces the stale binding for j.4 vacuous-pass
+            // detection (sister-pattern fix to Layer 3); non-label fields stay from pr.
+            const { data: freshPR } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            const labels = (freshPR.labels || []).map(l => (typeof l === 'string' ? l : l.name));
+            const hasLabel = (name) => labels.includes(name);
+
+            // Q5b: early-return on closed PR (frozen state, no-op)
+            if (issueState === 'closed') {
+              core.info(`silent_skip event=closed-state layer=5a number=${number} message="PR #${number} is closed; Layer 5a no-op."`);
+              return;
+            }
+
+            // ------------------------------------------------------------------
+            // TC4 reversal handler: needs-tester-signoff re-added AFTER tester
+            // APPROVED → removeLabel('status:ready'). Sister-pattern to PR #426
+            // Layer 4 (markers, idempotent bot-attributed comments).
+            // ------------------------------------------------------------------
+            // HOTFIX (Issue #436 P0): context.event.action is undefined on pull_request_target
+            // (context.event is the WebhookEvent metadata {name, payload}, NOT {action}).
+            // Canonical accessor is context.payload.action. Defensive fallback: 'opened' default.
+            const evtAction = context.payload.action || 'opened';
+
+            // ------------------------------------------------------------------
+            // Issue #675 P0 fix: Layer 5 misfire regression guards (Option C).
+            // TC3: bot-actor exclusion — prevent L5 self-trigger loop when bot's own
+            //     status:ready addition triggers another unlabeled/labeled event.
+            // TC1: status:* unlabeled short-circuit — owner cleanup of status:ready
+            //     (manual flip status:ready → status:in-progress) is a verdict
+            //     decision, not a status reset trigger. L5 must NOT re-add
+            //     status:ready on action=unlabeled with status:* label.
+            // Sister-pattern: d077 regression test (P0 BUG #675, Issue #675 cmt
+            // 4832077155 arch RCA cycle ~1081).
+            // ------------------------------------------------------------------
+            if (context.sender && context.sender.type === 'Bot') {
+              core.info(`silent_skip event=bot-actor-excluded layer=5a number=${number} sender=${context.sender.login || 'unknown'} issue=675-tc3 message="Bot actor excluded — preventing self-trigger loop"`);
+              return;
+            }
+            if (evtAction === 'unlabeled' && context.payload.label && context.payload.label.name && context.payload.label.name.startsWith('status:')) {
+              core.info(`silent_skip event=status-removal-short-circuit layer=5a number=${number} label=${context.payload.label.name} issue=675-tc1 message="status:* removal — owner verdict, not L5 trigger"`);
+              return;
+            }
+
+            // ------------------------------------------------------------------
+            // Issue #680 (PR #683 amendments #2 + #3 + #4) DRAFT-PR skip-guard.
+            // PR #679 LIVE INSTANCE: status:ready auto-added to DRAFT PR (premature
+            // owner merge signal). DRAFT PRs skip ALL status:ready auto-add for
+            // all types (amendment #3 — type-driven table DRAFT row extension).
+            //
+            // Sister-pattern: d077 (RE-ADD regression, Issue #675) + d078 (this
+            // test). The DRAFT-PR skip-guard fires BEFORE Layer 5 j.4 vacuous-pass
+            // check (preserves reviewer chain audit trail per cycle ~#3698).
+            //
+            // Audit marker: `adr-0012-status-ready-gating-draft-skip` emitted on
+            // console for sister-test grep (d078 TC4 + ADR-0012 observability
+            // variant — sister-pattern to existing 'adr-0012-status-ready-gating-skip').
+            // ------------------------------------------------------------------
+            if (context.payload.pull_request && context.payload.pull_request.draft === true) {
+              core.info(`silent_skip event=draft-pr-skip-guard layer=5a number=${number} issue=680-amendment-2 message="DRAFT PR #${number} — skip-guard fired. DRAFT PRs skip ALL status:ready auto-add for all types (amendment #3 — type-driven table DRAFT row extension)."`);
+              console.log(`[Layer 5 audit] adr-0012-status-ready-gating-draft-skip: PR=#${number} type=${(labels.find(l => l.startsWith('type:')) || '(none)')} agent=${(labels.find(l => l.startsWith('agent:')) || '(none)')} (Issue #680 DRAFT skip-guard, amendment #4 audit marker)`);
+              return;
+            }
+
+            // ------------------------------------------------------------------
+            // Layer 5.5 (j.4 vacuous-pass detection, Issue #789 owner scope,
+            // cycle ~#3675 + ~#3698 escalation): PRE-CHECK reviewer chain
+            // BEFORE any status:ready decision. Per @orchestrator cycle ~#3698
+            // insight: Layer 5's PASSING state IS its desired state when the
+            // bug considers reviewer chain redundant with status:ready and
+            // silently removes cc:dev/test/needs-tester. After removal, Layer 5
+            // passes vacuously. Per lens (j.4) — when a check passes after a
+            // precondition has been silently removed, the passing state is
+            // misleading. Verification requires asserting the precondition
+            // exists AT CHECK TIME.
+            //
+            // Required reviewer chain per type-driven rules (ADR-0012 + ADR-0048):
+            //   type:bug / type:feature / type:refactor / type:chore / type:incident:
+            //     cc:tester + needs-tester-signoff MUST be present (reviewer chain
+            //     intact BEFORE status:ready auto-add)
+            //   type:docs (agent:architect|product-manager|orchestrator):
+            //     cc:architect + verdict-by:<ts> MUST be present
+            //
+            // If chain INCOMPLETE → FAIL with j.4 message (NOT silent-skip).
+            // This prevents vacuous-pass — the bug's "desired state" of empty
+            // reviewer chain + green Layer 5.
+            //
+            // PRESERVE semantics: when status:ready is added, Layer 5 MUST NOT
+            // remove cc:dev/test/needs-tester — the reviewer chain is the
+            // AUDIT TRAIL through owner squash merge. Owner-authority on
+            // reviewer chain removal (per ADR-0031) is preserved.
+            //
+            // Sister-pattern: TD-021 cluster (auto-promote verdict-state drift,
+            // 7 instances), TD-048 (commit-body authoring attestation gap,
+            // 19th in blind-spot family).
+            // ------------------------------------------------------------------
+            const reqType = labels.find(l => l.startsWith('type:'));
+            const reqAgent = labels.find(l => l.startsWith('agent:'));
+            const reviewerChainDocs = ['cc:architect', 'cc:product-manager', 'cc:orchestrator'];
+            const docsAuthorAgent = reviewerChainDocs.map(c => 'agent:' + c.split(':')[1]).includes(reqAgent);
+            let vacuousPassFail = null;
+            if (reqType === 'type:docs' && docsAuthorAgent) {
+              // docs path: cc:<author> + verdict-by required
+              const hasAuthorCc = reviewerChainDocs.some(c => labels.includes(c));
+              const hasVerdictBy = labels.some(l => l.startsWith('verdict-by:'));
+              if (!hasAuthorCc || !hasVerdictBy) {
+                vacuousPassFail = `j.4 vacuous-pass: type:docs PR (agent=${reqAgent}) missing required reviewer chain — hasAuthorCc=${hasAuthorCc} hasVerdictBy=${hasVerdictBy}. Per cycle ~#3698 insight, Layer 5 must NOT pass vacuously after reviewer chain removal.`;
+              }
+            } else if (['type:bug', 'type:feature', 'type:refactor', 'type:chore', 'type:incident'].includes(reqType)) {
+              // non-docs path: cc:tester + needs-tester-signoff required
+              if (!labels.includes('cc:tester') || !labels.includes('needs-tester-signoff')) {
+                vacuousPassFail = `j.4 vacuous-pass: non-docs PR (type=${reqType}) missing reviewer chain — cc:tester=${labels.includes('cc:tester')} needs-tester-signoff=${labels.includes('needs-tester-signoff')}. Per cycle ~#3698 insight, Layer 5 must NOT pass vacuously after reviewer chain removal.`;
+              }
+            }
+            if (vacuousPassFail) {
+              const vacuousBody = [
+                markerSkip,
+                '**Layer 5 j.4 VACUOUS-PASS detection (FAIL, not silent-skip)**',
+                '',
+                `- **Trigger**: ` + '`' + `${context.eventName || context.event_name}` + '`' + ` event, action=` + '`' + `${context.payload.action || '(batch)'}` + '`' + `, label=` + '`' + `${context.payload.label?.name || '(batch)'}` + '`' + ``,
+                `- **PR**: #${number}`,
+                `- **Type**: ` + '`' + `${reqType || '(none)'}` + '`' + ``,
+                `- **Agent**: ` + '`' + `${reqAgent || '(none)'}` + '`' + ``,
+                `- **Decision**: ${vacuousPassFail}`,
+                `- **Workflow run**: ` + '`' + `${{ github.run_id }}` + '`' + ``,
+                `- **ADR**: ` + '`' + `docs/decisions/ADR-0048-status-ready-auto-add-gating.md` + '`' + ` (cycle ~#3698 j.4 extension)`,
+                `- **TD**: TD-021 cluster (auto-promote verdict-state drift, 7 instances), TD-048 (commit-body authoring, blind-spot family)`,
+              ].join('\n');
+              const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number: number, per_page: 100 });
+              const existing = comments.find(c => c.user && c.user.type === 'Bot' && c.body && c.body.includes(markerSkip));
+              if (existing) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: vacuousBody });
+              } else {
+                await github.rest.issues.createComment({ owner, repo, issue_number: number, body: vacuousBody });
+              }
+              core.setFailed(`j.4 vacuous-pass detected on PR #${number} (${reqType}): reviewer chain missing BEFORE status:ready transition. ${vacuousPassFail}`);
+              return;
+            }
+
+            if (evtAction === 'labeled' && context.payload.label && context.payload.label.name === 'needs-tester-signoff' && hasLabel('status:ready')) {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number: number, name: 'status:ready' });
+              const reversalBody = [
+                markerReversal,
+                '**Layer 5 reversal handler fired (ADR-0048 §Type-driven table — TC4)**',
+                '',
+                `- **Trigger**: ` + '`' + `${context.event_name}` + '`' + ` event, action=` + '`' + `labeled` + '`' + `, label=` + '`' + `needs-tester-signoff` + '`' + ``,
+                `- **Removed**: ` + '`' + `status:ready` + '`' + ` (tester re-rejected after APPROVED — needs-tester-signoff re-added)`,
+                `- **PR**: #${number}`,
+                `- **Workflow run**: ` + '`' + `${{ github.run_id }}` + '`' + ``,
+                `- **ADR**: ` + '`' + `docs/decisions/ADR-0048-status-ready-auto-add-gating.md` + '`' + ``,
+              ].join('\n');
+              const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number: number, per_page: 100 });
+              const existing = comments.find(c => c.user && c.user.type === 'Bot' && c.body && c.body.includes(markerReversal));
+              if (existing) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: reversalBody });
+              } else {
+                await github.rest.issues.createComment({ owner, repo, issue_number: number, body: reversalBody });
+              }
+              core.info(`reversal event=layer-5-tc4 number=${number} removed=status:ready added=needs-tester-signoff message="Layer 5 reversal: removed status:ready from PR #${number} (needs-tester-signoff re-added)"`);
+              return;
+            }
+
+            // ------------------------------------------------------------------
+            // Propagate state to Layer 5b via outputs (sister-pattern to TD-029
+            // output-propagation discipline + d112 conftest env-var precedence).
+            // GH Actions outputs are STRINGS — JSON.stringify for arrays.
+            // ------------------------------------------------------------------
+            core.setOutput('number', String(number));
+            core.setOutput('fresh_labels', JSON.stringify(labels));
+            core.setOutput('issue_state', issueState);
+            core.setOutput('pr_draft', String(!!freshPR.draft));
+            core.setOutput('sender_type', context.sender && context.sender.type ? context.sender.type : 'User');
+            core.setOutput('sender_login', context.sender && context.sender.login ? context.sender.login : 'unknown');
+            core.setOutput('type', reqType || '');
+            core.setOutput('agent', reqAgent || '');
+            core.setOutput('evt_action', evtAction);
+            core.info(`[Layer 5a] propagated-to-5b number=${number} state=${issueState} draft=${!!freshPR.draft} type=${reqType || '(none)'} agent=${reqAgent || '(none)'}`);
+
+      - name: Layer 5b status:ready gating + audit-trail
+        if: github.eventName == 'pull_request_target' && steps.layer5a.outputs.number
+        id: layer5b
+        needs: [layer5a]
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
+        env:
+          MARKER: "<!-- adr-0012-status-ready-gating -->"
+          MARKER_SKIP: "<!-- adr-0012-status-ready-gating-skip -->"
+          MARKER_REVERSAL: "<!-- adr-0012-status-ready-gating-reversal -->"
+        with:
+          script: |
+            const marker = process.env.MARKER;
+            const markerSkip = process.env.MARKER_SKIP;
+            const markerReversal = process.env.MARKER_REVERSAL;
+            // Read from Layer 5a outputs (sister-pattern to TD-029 output-propagation)
+            const number = parseInt('${{ steps.layer5a.outputs.number }}', 10);
+            const freshLabels = JSON.parse('${{ steps.layer5a.outputs.fresh_labels }}');
+            const issueState = '${{ steps.layer5a.outputs.issue_state }}';
+            const prDraft = '${{ steps.layer5a.outputs.pr_draft }}' === 'true';
+            const senderType = '${{ steps.layer5a.outputs.sender_type }}';
+            const senderLogin = '${{ steps.layer5a.outputs.sender_login }}';
+            const labels = freshLabels;
+            const hasLabel = (name) => labels.includes(name);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const evtAction = '${{ steps.layer5a.outputs.evt_action }}' || 'opened';
+            // Type + agent pre-resolved by 5a (j.4 vacuous-pass pre-check)
+            const type = '${{ steps.layer5a.outputs.type }}';
+            const agent = '${{ steps.layer5a.outputs.agent }}';
+
+            // Step 2: Type-driven decision (ADR-0048 §Type-driven table).
+            const isDocs = type === 'type:docs';
+            const docsAuthor = agent === 'agent:architect' || agent === 'agent:product-manager' || agent === 'agent:orchestrator';
+            const nonDocsTypes = ['type:bug', 'type:feature', 'type:refactor', 'type:chore', 'type:incident'];
+            const isNonDocs = nonDocsTypes.includes(type);
+
+            let shouldAddReady = false;
+            let skipReason = '';
+
+            if (isDocs && docsAuthor) {
+              // ADR-0021: docs PR convention — arch/PM/orch verdict sufficient.
+              // needs-architect-review cleared → ready. (PM/orch don't carry that
+              // label, so this check naturally passes for them.)
+              const archCleared = !hasLabel('needs-architect-review');
+              if (archCleared) {
+                shouldAddReady = true;
+              } else {
+                skipReason = `type:docs but needs-architect-review still present (waiting on arch verdict)`;
+              }
+            } else {
+              // Non-docs (or unknown type — defensive default): tester prereq.
+              const testerCleared = !hasLabel('needs-tester-signoff');
+              if (testerCleared) {
+                shouldAddReady = true;
+              } else {
+                skipReason = `non-docs PR (type=${type || 'unknown'}), needs-tester-signoff still present (tester prereq missing)`;
+              }
+            }
+
+            // ------------------------------------------------------------------
+            // Step 2.5: Path A verdict-emoji gate (ADR-0048 amendment, Issue #659,
+            // RETRO-015 §16 fix). MUST run AFTER Step 2 declarations AND the
+            // type-driven decision above — assignment to `skipReason` and
+            // `shouldAddReady` requires the `let` bindings from L471-472 to be
+            // initialized (TDZ discipline). Tester cycle ~972 verdict caught the
+            // crash iff `latestVerdict ∈ {🟡, 🔴}` before this move.
+            // ------------------------------------------------------------------
+            let latestVerdict = null;
+            for await (const page of github.paginate.iterator(
+              github.rest.issues.listComments, { owner, repo, issue_number: number, per_page: 100 }
+            )) {
+              for (const c of page.data) {
+                // Filter bot-attributed comments (Layer 5 self-log, label-check, etc.)
+                // Arch peer review (cycle ~970) fix #1: prevents Layer 5's own
+                // silent-skip log (which contains verdict emoji in skipReason)
+                // from re-triggering the gate on next run.
+                if (!c.user || c.user.type === 'Bot') continue;
+                const m = c.body && c.body.match(/🟢|🟡|🔴/g);
+                if (m) latestVerdict = m[m.length - 1];
+              }
+            }
+            if (latestVerdict === '🟡' || latestVerdict === '🔴') {
+              // Override Step 2's positive decision with verdict-emoji suppression.
+              // 🟢 is the explicit OK signal; absence of verdict still lets Step 2 stand.
+              shouldAddReady = false;
+              skipReason = `Path A verdict-emoji gate: latest peer verdict=${latestVerdict} (Issue #659, ADR-0048 amend, REFUSED)`;
+            }
+
+            // ------------------------------------------------------------------
+            // ADR-0048 Amend-3: verdictPresent pre-condition for INITIAL-TRIGGER
+            // on type:docs PRs (Issue #744 — Closes #744, d077-TC6 sister-test).
+            //
+            // Closes PR #736 LIVE INSTANCE (TD-021 6th live instance): type:docs
+            // PR initial-trigger fires status:ready + cc:human with ZERO peer
+            // verdicts in comments[]/reviews[]/verdict-by — owner gate bypass +
+            // ADR-0024 §Schema violation.
+            //
+            // verdictPresent checks 4 verdict surfaces (sister to Issue #430
+            // §Pre-citation cross-check comments[] AND reviews[]):
+            //   (a) latestVerdict === '🟢'                              — Amend-1 emoji OK
+            //   (b) hasLabel('verdict:approved')                       — explicit label OK
+            //   (c) labels.some(l => l.startsWith('verdict-by'))       — ADR-0024 §Schema ts
+            //   (d) reviews.length > 0                                 — formal review sub
+            //
+            // Skip when:
+            //   - action=unlabeled (Amend-1 short-circuit handles RE-ADD)
+            //   - non-type:docs (Amend-1 verdict:changes-requested + tester prereq gate)
+            // ------------------------------------------------------------------
+            const isInitialTrigger = evtAction === 'opened' || (
+              evtAction === 'labeled' &&
+              context.payload.label && context.payload.label.name &&
+              !context.payload.label.name.startsWith('status:') &&
+              !context.payload.label.name.startsWith('verdict:')
+            );
+            // Fetch reviews[] (sister to listComments per Issue #430 §Pre-citation cross-check)
+            let reviews = [];
+            for await (const page of github.paginate.iterator(
+              github.rest.pulls.listReviews, { owner, repo, pull_number: number, per_page: 100 }
+            )) {
+              reviews = reviews.concat(page.data);
+            }
+            const verdictPresent = (
+              latestVerdict === '🟢' ||
+              hasLabel('verdict:approved') ||
+              labels.some(l => l.startsWith('verdict-by')) ||
+              reviews.length > 0
+            );
+            if (isInitialTrigger && isDocs && docsAuthor && !verdictPresent) {
+              // SUPPRESS — type:docs PR initial-triggered with NO peer verdict
+              // (comments=0, reviews=0, verdict-by=absent, verdict:approved=absent).
+              // Closes PR #736 pathology; re-enables Layer 5 only AFTER peer verdict lands.
+              shouldAddReady = false;
+              skipReason = `Amend-3 verdict-state gate: type:docs PR initial-trigger but no peer verdict (comments=0, reviews=0, verdict-by=absent, verdict:approved=absent) — Issue #744, REFUSED`;
+            }
+
+            // ------------------------------------------------------------------
+            // Issue #675 P0 fix: Step 2.6 verdict-label gate (Option A).
+            // TC2: explicit verdict:changes-requested label check — owner signals
+            //     CHANGES REQUESTED via this label, L5 must NOT re-add status:ready
+            //     even on action=unlabeled events. Complements emoji gate (which
+            //     catches 🟡/🔴 in comments) by catching label-only signals.
+            // TC4: loop-protection via sticky verdict label — verdict:changes-requested
+            //     is persistent (doesn't auto-remove), so successive status:ready
+            //     flips cannot break out of the suppressed state.
+            // Sister-pattern: explicit verdict label taxonomy (ADR-0048 amendment
+            // extension), sister to TC5 d069 verdict-emoji gate.
+            // ------------------------------------------------------------------
+            if (hasLabel('verdict:changes-requested')) {
+              shouldAddReady = false;
+              skipReason = `Path A verdict-label gate: verdict:changes-requested label present (Issue #675 Option A, REFUSED)`;
+            }
+
+            // ------------------------------------------------------------------
+            // Step 3: Silent-skip audit (ADR-0012 §d lens silent-skip risk).
+            // ------------------------------------------------------------------
+            if (!shouldAddReady) {
+              const skipBody = [
+                markerSkip,
+                '**Layer 5 silent-skip (ADR-0048 §Type-driven table)**',
+                '',
+                `- **Trigger**: ` + '`' + `${context.eventName || context.event_name}` + '`' + ` event, action=` + '`' + `${context.payload.action || '(batch)'}` + '`' + `, label=` + '`' + `${context.payload.label && context.payload.label.name || '(batch)'}` + '`' + ``,
+                `- **PR**: #${number}`,
+                `- **Type**: ` + '`' + `${type || '(none)'}` + '`' + ``,
+                `- **Agent**: ` + '`' + `${agent || '(none)'}` + '`' + ``,
+                `- **Reason**: ${skipReason}`,
+                `- **Decision**: skip status:ready auto-add (reviewer chain incomplete)`,
+                `- **Workflow run**: ` + '`' + `${{ github.run_id }}` + '`' + ``,
+                `- **ADR**: ` + '`' + `docs/decisions/ADR-0048-status-ready-auto-add-gating.md` + '`' + ``,
+              ].join('\n');
+              const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number: number, per_page: 100 });
+              const existing = comments.find(c => c.user && c.user.type === 'Bot' && c.body && c.body.includes(markerSkip));
+              if (existing) {
+                await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: skipBody });
+              } else {
+                await github.rest.issues.createComment({ owner, repo, issue_number: number, body: skipBody });
+              }
+              core.info(`silent_skip event=layer-5-skip number=${number} reason="${skipReason}" message="Layer 5 silent-skip on PR #${number}: ${skipReason}"`);
+              return;
+            }
+
+            // ------------------------------------------------------------------
+            // Step 4: Atomic transition — removeLabel('status:in-review') FIRST,
+            // then addLabel('status:ready'). gh batches into one PATCH (sister-
+            // pattern to PR #428 atomic flip). Cascade-strip Part 1 preserves
+            // the OLDER label, so we remove status:in-review first to ensure
+            // status:ready becomes the canonical primary.
+            //
+            // PRESERVE SEMANTICS (cycle ~#3698 j.4 extension, Issue #789 owner
+            // scope): Layer 5 MUST NOT remove cc:tester / cc:developer /
+            // cc:architect / cc:product-manager / cc:orchestrator /
+            // needs-tester-signoff / needs-architect-review when adding
+            // status:ready. The reviewer chain is the AUDIT TRAIL through
+            // owner squash merge per ADR-0012 4-cat invariant. Owner-authority
+            // on reviewer chain removal (per ADR-0031) is preserved.
+            // ------------------------------------------------------------------
+            const inReviewPresent = hasLabel('status:in-review');
+            if (inReviewPresent) {
+              await github.rest.issues.removeLabel({ owner, repo, issue_number: number, name: 'status:in-review' });
+            }
+            await github.rest.issues.addLabels({
+              owner, repo, issue_number: number,
+              labels: ['status:ready', 'cc:human']
+            });
+            const readyBody = [
+              marker,
+              '**Layer 5 status:ready auto-gate fired (ADR-0048 §Type-driven table)**',
+              '',
+              `- **Trigger**: ` + '`' + `${context.eventName || context.event_name}` + '`' + ` event, action=` + '`' + `${context.payload.action || '(batch)'}` + '`' + `, label=` + '`' + `${context.payload.label && context.payload.label.name || '(batch)'}` + '`' + ``,
+              `- **PR**: #${number}`,
+              `- **Type**: ` + '`' + `${type || '(none)'}` + '`' + ``,
+              `- **Agent**: ` + '`' + `${agent || '(none)'}` + '`' + ``,
+              `- **Decision**: status:ready + cc:human added (reviewer chain complete + 4-cat invariant intact + verdict gate pass)`,
+              `- **Workflow run**: ` + '`' + `${{ github.run_id }}` + '`' + ``,
+              `- **ADR**: ` + '`' + `docs/decisions/ADR-0048-status-ready-auto-add-gating.md` + '`' + ``,
+            ].join('\n');
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number: number, per_page: 100 });
+            const existing = comments.find(c => c.user && c.user.type === 'Bot' && c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body: readyBody });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: number, body: readyBody });
+            }
+            core.info(`layer-5 status-ready-added number=${number} type=${type} agent=${agent} message="Layer 5 auto-gate: status:ready + cc:human added to PR #${number}"`);
+
+
+      - name: TD-067b closed-event 4-cat diagnostic (ADR-0070, Issue #934)
+        if: github.event_name == 'pull_request_target' && github.event.action == 'closed' && github.event.pull_request.merged == true
+        uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b  # v7
+        env:
+          MARKER: "<!-- adr-0070-closed-diagnostic -->"
+        with:
+          script: |
+            const marker = process.env.MARKER;
+            const pr = context.payload.pull_request;
+            const number = pr.number;
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+
+            // Issue #819 fix sister-pattern: fresh PR labels via pulls.get
+            // (webhook snapshot is frozen at fire time; subsequent label mutations
+            // by label-cleanup.yml are invisible without API re-fetch).
+            const { data: freshPR } = await github.rest.pulls.get({ owner, repo, pull_number: number });
+            const labels = (freshPR.labels || []).map(l => (typeof l === 'string' ? l : l.name));
+
+            // Expected post-cleanup baseline (design doc §Data model, condensed).
+            // After `label-cleanup.yml` runs on a squash-merged PR, label set MUST equal:
+            const typeLabels = labels.filter(l => l.startsWith('type:'));
+            const statusLabels = labels.filter(l => l.startsWith('status:'));
+            const priorityLabels = labels.filter(l => l.startsWith('priority:'));
+            const sprintLabels = labels.filter(l => l.startsWith('sprint:'));
+
+            const missing = [];
+            const extra = [];
+
+            if (typeLabels.length === 0) {
+              missing.push('MISSING type:* (one of: vision|feature|bug|docs|chore|refactor|incident)');
+            } else if (typeLabels.length > 1) {
+              extra.push(`MULTIPLE type:* labels: ${typeLabels.join(', ')}`);
+            }
+
+            if (statusLabels.length === 0) {
+              missing.push('MISSING status:done (post-cleanup baseline invariant)');
+            } else if (statusLabels.length > 1) {
+              extra.push(`MULTIPLE status:* labels: ${statusLabels.join(', ')}`);
+            } else if (statusLabels[0] !== 'status:done') {
+              extra.push(`UNEXPECTED status:* = ${statusLabels[0]} (expected status:done)`);
+            }
+
+            if (priorityLabels.length > 1) {
+              extra.push(`MULTIPLE priority:* labels: ${priorityLabels.join(', ')}`);
+            }
+            if (sprintLabels.length > 1) {
+              extra.push(`MULTIPLE sprint:* labels: ${sprintLabels.join(', ')}`);
+            }
+
+            // Detect labels that should have been stripped by label-cleanup.yml
+            const expectedStripped = ['agent-stall'];
+            const strippedPrefixes = ['agent:', 'cc:', 'needs-', 'verdict-by:'];
+            for (const l of labels) {
+              if (expectedStripped.includes(l)) {
+                extra.push(`UNEXPECTED label (should be stripped): ${l}`);
+              } else if (strippedPrefixes.some(p => l.startsWith(p))) {
+                extra.push(`UNEXPECTED label (should be stripped): ${l}`);
+              }
+            }
+
+            core.info(`closed_diagnostic event=triggered pr=${number} labels=${labels.join(', ') || '(none)'}`);
+            core.info(`closed_diagnostic result missing=${missing.length} extra=${extra.length}`);
+
+            if (missing.length === 0 && extra.length === 0) {
+              core.info(`closed_diagnostic event=baseline-match pr=${number} labels=${labels.join(',')} message="Post-cleanup label state matches expected baseline (ADR-0070 §Data model)"`);
+              return;
+            }
+
+            core.warning(`closed_diagnostic event=deviation-detected pr=${number} missing=${missing.length} extra=${extra.length} message="Post-cleanup label state deviates from expected baseline — diagnostic comment posted"`);
+
+            const body = [
+              marker,
+              '## 🚨 TD-067b closed-event 4-cat diagnostic — DEVIATION DETECTED',
+              '',
+              `Closed-merged PR #${number} has a post-cleanup label state that deviates from the expected baseline.`,
+              '',
+              ...(missing.length ? ['### Missing labels', '', ...missing.map(m => `- ❌ ${m}`), ''] : []),
+              ...(extra.length ? ['### Unexpected labels', '', ...extra.map(e => `- ⚠️ ${e}`), ''] : []),
+              '',
+              '### Expected post-cleanup baseline (per `docs/designs/TD-067b-design.md` §Data model)',
+              '',
+              '- `type:<vision|feature|bug|docs|chore|refactor|incident>` (exactly 1)',
+              '- `status:done` (exactly 1)',
+              '- `priority:<P0|P1|P2|P3|unknown>` (optional, 0 or 1)',
+              '- `sprint:<sprint-id>` (optional, 0 or 1)',
+              '- `security` (optional, 0 or 1)',
+              '- `good-first-issue` (optional, 0 or 1)',
+              '',
+              '`agent:*`, `cc:*`, `needs-*`, `agent-stall`, `verdict-by:*` are stripped by design — their absence is expected.',
+              '',
+              '---',
+              '',
+              `_This is an automated diagnostic. See \`docs/designs/TD-067b-design.md\` + ADR-0070 + Issue #934._`,
+            ].join('\n');
+
+            // Bot comment idempotency (Layer 1-5 sister-pattern: L108-110, L851)
+            const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number: number, per_page: 100 });
+            const existing = comments.find(c => c.user && c.user.type === 'Bot' && c.body && c.body.includes(marker));
+            if (existing) {
+              await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+            } else {
+              await github.rest.issues.createComment({ owner, repo, issue_number: number, body });
+            }
