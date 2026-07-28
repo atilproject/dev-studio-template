@@ -34,7 +34,7 @@
 #   - cycle ~#3968Q+847 inline d-test amender pattern — TC5+TC6 amend + TC7+TC8
 #     NEW in same commit before sign-off request (per ADR-0044 + cycle ~#3893Q v2)
 #
-# 8 TCs (≥6 baseline per ADR-0049 + ADR-0044):
+# 10 TCs (≥6 baseline per ADR-0049 + ADR-0044):
 #   TC1: workflow file exists at .github/workflows/disposable-bootstrap-test.yml
 #   TC2: YAML syntactic check (Python yaml.safe_load parses cleanly)
 #   TC3: NEW atomic 'Create + seed disposable public repo' step present (Issue #1254 fix)
@@ -43,6 +43,8 @@
 #   TC6 (AMENDED): Create+seed step uses `--push --source .` atomic pattern (was: x-access-token URL)
 #   TC7 (NEW): `--push` flag present in create step (atomic create+seed signal)
 #   TC8 (NEW): old 'Seed new repo with dev-studio-template content' step is REMOVED (regression guard)
+#   TC9 (NEW — Issue #231 5th-order fix): `--remote upstream` flag present in gh repo create
+#   TC10 (NEW — Issue #231 defense-in-depth): `git remote remove origin` defense before gh repo create
 #
 # Pre-port RED state (verified 2026-07-28T16:05Z against PR #228 merged workflow):
 #   - TC1: PASS (file exists)
@@ -182,22 +184,49 @@ else
   run_tc "TC${tc_num}: old 'Seed new repo with dev-studio-template content' step STILL PRESENT (count=$seed_step_present) — should be removed by Option B refactor" 1
 fi
 
+# TC9 (NEW — Issue #231 5th-order fix, Run #4 30384997111 RED at step 3 origin remote conflict):
+#   --remote upstream flag is present in `gh repo create` invocation (avoids the
+#   name collision with the 'origin' remote that step 2 (actions/checkout) created).
+tc_num=$((tc_num + 1))
+remote_upstream_flag=$(grep -A 10 "Create + seed disposable public repo" "$TARGET_FILE" 2>/dev/null | grep -cE -- "--remote[[:space:]]+(upstream|[\"']upstream[\"'])" | tr -d ' ')
+if [[ "$remote_upstream_flag" -ge 1 ]]; then
+  run_tc "TC${tc_num}: --remote upstream flag present in 'Create + seed' step (avoids origin name collision — Issue #231 5th-order fix)" 0
+else
+  run_tc "TC${tc_num}: --remote upstream flag NOT found in 'Create + seed' step — Issue #231 fix missing (Run #4 30384997111 would still RED)" 1
+fi
+
+# TC10 (NEW — Issue #231 5th-order defense-in-depth):
+#   `git remote remove origin` defense step is present BEFORE the `gh repo create`
+#   invocation (belt + suspenders for the --remote upstream fix).
+tc_num=$((tc_num + 1))
+git_remote_remove_origin=$(grep -A 12 "Create + seed disposable public repo" "$TARGET_FILE" 2>/dev/null | grep -cE "git remote remove origin" | tr -d ' ')
+if [[ "$git_remote_remove_origin" -ge 1 ]]; then
+  run_tc "TC${tc_num}: 'git remote remove origin' defense present before gh repo create (Issue #231 defense-in-depth)" 0
+else
+  run_tc "TC${tc_num}: 'git remote remove origin' defense MISSING — Issue #231 belt+suspenders missing" 1
+fi
+
 echo ""
 total_tcs=$tc_num
 if [ "$failed" -eq 0 ]; then
-  echo "✅ All $total_tcs TCs GREEN — Sprint 35 S35-004 atomic create+seed Issue #1254 fix verified"
+  echo "✅ All $total_tcs TCs GREEN — Sprint 35 S35-004 atomic create+seed Issue #1254 + Issue #231 5th-order fix verified"
   echo "   Impl PR ready for dev-prepared + owner-squash per ADR-0031 + cycle ~#414 sister pattern"
+  echo "   cycle ~#3968Q+1109 inverse outcome RECURSIVE: 5 layers deep on S35-004 (Run #1 → #2 → #3 → #4 → #5)"
   exit 0
 else
   echo "❌ $failed TC(s) failed of $total_tcs — RED-first contract per ADR-0044"
   echo ""
-  echo "Fix scope (Issue #1254):"
+  echo "Fix scope (Issue #1254 + Issue #231 Option C):"
   echo "  - Replace step 2 'Create disposable public repo' with atomic 'Create + seed disposable public repo'"
   echo "  - Use gh repo create --push --source . for atomic create+seed"
   echo "  - REMOVE old step 2.5 'Seed new repo with dev-studio-template content'"
   echo "  - env GH_TOKEN: \${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }} preserved"
+  echo "  - ADD 'git remote remove origin || true' defense before gh repo create (Run #4 origin conflict)"
+  echo "  - ADD '--remote upstream' flag to gh repo create (avoid origin name collision)"
   echo ""
   echo "Sister-pattern: cycle ~#3968Q+414 dev-prepared + owner-squash workflow"
-  echo "Sister-pattern: cycle ~#3968Q+847 inline d-test amender (TC5+TC6 amend, TC7+TC8 NEW)"
+  echo "Sister-pattern: cycle ~#3968Q+847 inline d-test amender (TC5+TC6 amend, TC7+TC8+TC9+TC10 NEW)"
+  echo "Sister-pattern: cycle ~#3968Q+1109 inverse outcome RECURSIVE 5 layers — Run #4 RED at step 3 (origin conflict) → Option C fix"
+  echo "Sister-pattern: RETRO-035 LIVE VALIDATION: 'When RED → fix → re-trigger RED at **different step**, investigate next downstream step's data flow'"
   exit 1
 fi

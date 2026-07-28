@@ -70,16 +70,27 @@ jobs:
           fetch-depth: 0
 
       # 2. Generate unique disposable repo name + ATOMIC create + seed via
-      # `gh repo create --push --source .` (Issue #1254 fix — 3rd-order defect).
-      # Eliminates the separate seed step (was step 2.5 in PR #228) which hit
-      # `Permission denied to github-actions[bot]` on Run #3 (30376196420) because
-      # the auto GITHUB_TOKEN identity had no cross-repo push scope. By using
-      # `gh repo create --push` we keep auth inside the gh CLI process where
-      # GH_TOKEN env is honored for both the API call AND the git push.
+      # `gh repo create --push --source .` (Issue #1254 PR #229 — 3rd-order defect).
+      # + Issue #231 follow-up (5th-order defect — origin remote conflict).
+      # Run #4 (30384997111) RED at step 3 with "Unable to add remote 'origin'"
+      # because step 2 (actions/checkout) already added an 'origin' remote
+      # pointing to atilproject/dev-studio-template. `gh repo create --source .`
+      # tries to add a NEW remote with default name 'origin' → name collision →
+      # "Process completed with exit code 1". Repo IS created (URL in log) but
+      # push fails AND the leaked repo must be teardown-cleaned (which currently
+      # also fails — GH_TOKEN lacks `delete_repo` scope, see Issue #231 AC2).
+      #
+      # Option C fix (per orch dual-channel wake 2026-07-28T20:56:05Z+0300):
+      #   (a) Remove the existing 'origin' remote before `gh repo create` runs
+      #       (defense-in-depth: ensures the local-repo remote namespace is
+      #       free for --source to assign its own default 'origin' which would
+      #       in turn conflict-free with our subsequent teardown-cleanup)
+      #   (b) Pass `--remote upstream` so `gh` uses a distinct remote name even
+      #       if step (a) is skipped (works in tandem — belt + suspenders).
       # cycle ~#3968Q+414 dev-prepared + owner-squash pattern; cluster #41
-      # S35-004 forward-port (Sprint 35 S35-004 PR #228 → PR #229 3rd-order fix).
+      # S35-004 forward-port (PR #228 → PR #229 → Issue #231 5th-order fix).
       # id: create propagates REPO_NAME to downstream steps via steps.create.outputs.REPO_NAME.
-      - name: Create + seed disposable public repo (atomic gh repo create --push)
+      - name: Create + seed disposable public repo (atomic gh repo create --push --remote upstream)
         id: create
         env:
           GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
@@ -88,10 +99,17 @@ jobs:
           REPO_NAME="disposable-bootstrap-public-$(date +%s)"
           echo "REPO_NAME=${REPO_NAME}" >> "$GITHUB_OUTPUT"
           echo "Repo URL: https://github.com/atilproject/${REPO_NAME}" >> "$GITHUB_STEP_SUMMARY"
-          # Atomic create + seed in one gh CLI invocation. --source . points at
-          # the GITHUB_WORKSPACE (dev-studio-template HEAD, checked out at step 1).
+          # Defense-in-depth (Option C step a): remove the 'origin' remote that
+          # step 2 (actions/checkout) created. This frees the name so subsequent
+          # gh / git operations do not collide.
+          git remote remove origin || true
+          # Atomic create + seed in one gh CLI invocation.
+          # --source .   points at GITHUB_WORKSPACE (dev-studio-template HEAD, checked out at step 1).
+          # --remote upstream  instructs gh to use 'upstream' as the new remote
+          #                    name (not 'origin') so even if step (a) failed
+          #                    silently the push can still succeed.
           gh repo create "atilproject/${REPO_NAME}" --public --confirm \
-            --push --source .
+            --push --source . --remote upstream
 
       # 3. Clone + render + label (per AC1 init/render/labels capture).
       - name: Bootstrap init + render + labels (AC1 init/render/labels)
