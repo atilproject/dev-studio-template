@@ -69,9 +69,17 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      # 2. Generate unique disposable repo name + create via API.
+      # 2. Generate unique disposable repo name + ATOMIC create + seed via
+      # `gh repo create --push --source .` (Issue #1254 fix — 3rd-order defect).
+      # Eliminates the separate seed step (was step 2.5 in PR #228) which hit
+      # `Permission denied to github-actions[bot]` on Run #3 (30376196420) because
+      # the auto GITHUB_TOKEN identity had no cross-repo push scope. By using
+      # `gh repo create --push` we keep auth inside the gh CLI process where
+      # GH_TOKEN env is honored for both the API call AND the git push.
+      # cycle ~#3968Q+414 dev-prepared + owner-squash pattern; cluster #41
+      # S35-004 forward-port (Sprint 35 S35-004 PR #228 → PR #229 3rd-order fix).
       # id: create propagates REPO_NAME to downstream steps via steps.create.outputs.REPO_NAME.
-      - name: Create disposable public repo
+      - name: Create + seed disposable public repo (atomic gh repo create --push)
         id: create
         env:
           GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
@@ -80,24 +88,10 @@ jobs:
           REPO_NAME="disposable-bootstrap-public-$(date +%s)"
           echo "REPO_NAME=${REPO_NAME}" >> "$GITHUB_OUTPUT"
           echo "Repo URL: https://github.com/atilproject/${REPO_NAME}" >> "$GITHUB_STEP_SUMMARY"
-          gh repo create "atilproject/${REPO_NAME}" --public --confirm
-
-      # 2.5. Seed new repo with dev-studio-template content (Issue #1252 fix).
-      # Without this step, step 3 clones an empty repo and 'bash scripts/dev-studio-init.sh'
-      # fails with 'No such file or directory' (those scripts only exist in dev-studio-template,
-      # NOT in the newly-created empty repo). cycle ~#3968Q+414 dev-prepared + owner-squash
-      # pattern; cluster #41 S35-004 forward-port.
-      - name: Seed new repo with dev-studio-template content
-        env:
-          GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
-          REPO_NAME: ${{ steps.create.outputs.REPO_NAME }}
-        run: |
-          set -euo pipefail
-          # Push dev-studio-template HEAD to the new repo's main branch.
-          # Use the template's own working-tree state (already checked out at step 1).
-          git remote add disposable "https://x-access-token:${GH_TOKEN}@github.com/atilproject/${REPO_NAME}.git"
-          git push disposable HEAD:main
-          git remote remove disposable
+          # Atomic create + seed in one gh CLI invocation. --source . points at
+          # the GITHUB_WORKSPACE (dev-studio-template HEAD, checked out at step 1).
+          gh repo create "atilproject/${REPO_NAME}" --public --confirm \
+            --push --source .
 
       # 3. Clone + render + label (per AC1 init/render/labels capture).
       - name: Bootstrap init + render + labels (AC1 init/render/labels)
