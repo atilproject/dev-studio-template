@@ -82,6 +82,23 @@ jobs:
           echo "Repo URL: https://github.com/atilproject/${REPO_NAME}" >> "$GITHUB_STEP_SUMMARY"
           gh repo create "atilproject/${REPO_NAME}" --public --confirm
 
+      # 2.5. Seed new repo with dev-studio-template content (Issue #1252 fix).
+      # Without this step, step 3 clones an empty repo and 'bash scripts/dev-studio-init.sh'
+      # fails with 'No such file or directory' (those scripts only exist in dev-studio-template,
+      # NOT in the newly-created empty repo). cycle ~#3968Q+414 dev-prepared + owner-squash
+      # pattern; cluster #41 S35-004 forward-port.
+      - name: Seed new repo with dev-studio-template content
+        env:
+          GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
+          REPO_NAME: ${{ steps.create.outputs.REPO_NAME }}
+        run: |
+          set -euo pipefail
+          # Push dev-studio-template HEAD to the new repo's main branch.
+          # Use the template's own working-tree state (already checked out at step 1).
+          git remote add disposable "https://x-access-token:${GH_TOKEN}@github.com/atilproject/${REPO_NAME}.git"
+          git push disposable HEAD:main
+          git remote remove disposable
+
       # 3. Clone + render + label (per AC1 init/render/labels capture).
       - name: Bootstrap init + render + labels (AC1 init/render/labels)
         env:
