@@ -102,8 +102,9 @@ jobs:
           # auth instead of github-actions[bot] default credential.
           gh auth setup-git 2>&1 || echo "gh auth setup-git warning (continuing)"
           # Create the repo (API only — NO --push since it uses github-actions[bot]).
-          # --yes instead of deprecated --confirm (per gh CLI deprecation warning).
-          gh repo create "atilproject/${REPO_NAME}" --public --yes
+          # --confirm instead of --yes (per Issue #235 7th-order fix — runner gh CLI version is older;
+          # --yes is supported only in newer gh versions; --confirm is deprecated but supported in both).
+          gh repo create "atilproject/${REPO_NAME}" --public --confirm
           # Option D step (b): add the upstream remote with x-access-token URL.
           # The x-access-token URL embeds GH_TOKEN, so git push uses GH_TOKEN credential
           # regardless of git credential helper config (defense-in-depth — works even

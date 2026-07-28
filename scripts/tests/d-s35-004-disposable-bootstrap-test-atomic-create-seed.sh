@@ -34,7 +34,7 @@
 #   - cycle ~#3968Q+847 inline d-test amender pattern — TC5+TC6 amend + TC7+TC8
 #     NEW in same commit before sign-off request (per ADR-0044 + cycle ~#3893Q v2)
 #
-# 12 TCs (≥6 baseline per ADR-0049 + ADR-0044):
+# 14 TCs (≥6 baseline per ADR-0049 + ADR-0044):
 #   TC1: workflow file exists at .github/workflows/disposable-bootstrap-test.yml
 #   TC2: YAML syntactic check (Python yaml.safe_load parses cleanly)
 #   TC3: 'Create + seed disposable public repo' step present (Issue #1254 fix — combined create+seed)
@@ -47,6 +47,8 @@
 #   TC10 (NEW — 6th-order fix, Option D explicit credential): `git remote add upstream https://x-access-token:` pattern present (x-access-token URL uses GH_TOKEN credential regardless of git credential helper)
 #   TC11 (NEW — 6th-order fix, Option D explicit push): explicit `git push upstream HEAD:main` present (not just --push flag)
 #   TC12 (NEW — 6th-order fix, Run #5 regression guard): `--push` flag REMOVED from `gh repo create` invocation (regression guard against Run #5 github-actions[bot] 403 root cause)
+#   TC13 (NEW — 7th-order fix, Issue #235 Run #6 RED): `gh repo create ... --public --confirm` uses --confirm flag (deprecated but supported in older gh CLI versions on self-hosted runner; --yes is supported only in newer gh versions)
+#   TC14 (NEW — 7th-order fix, Run #6 regression guard): `--yes` flag NOT used in `gh repo create` invocation (Run #6 RCA: runner gh CLI version doesn't recognize --yes; --confirm is the safe cross-version flag)
 #
 # Pre-port RED state (verified 2026-07-28T16:05Z against PR #228 merged workflow):
 #   - TC1: PASS (file exists)
@@ -234,6 +236,29 @@ if [[ "$push_flag_in_create" -eq 0 ]]; then
   run_tc "TC${tc_num}: --push flag REMOVED from 'gh repo create' (Run #5 root cause guard — github-actions[bot] 403 prevention)" 0
 else
   run_tc "TC${tc_num}: --push flag STILL PRESENT in 'gh repo create' (count=$push_flag_in_create) — Run #5 root cause would still RED" 1
+fi
+
+# TC13 (NEW — 7th-order fix, Issue #235 Run #6 RED): `gh repo create ... --public --confirm` uses --confirm flag.
+#   Run #6 (30390499383) RED at 2026-07-28T19:06:43Z with "unknown flag: --yes". Root cause: the
+#   self-hosted runner's gh CLI version is older and doesn't support --yes (only --confirm is supported).
+#   The --confirm flag is deprecated in newer gh versions but still works in older ones — safe cross-version.
+tc_num=$((tc_num + 1))
+gh_repo_create_confirm=$(echo "$create_seed_block" | grep -E "^[[:space:]]*gh repo create" | grep -cE -- "--confirm" | tr -d ' ')
+if [[ "$gh_repo_create_confirm" -ge 1 ]]; then
+  run_tc "TC${tc_num}: 'gh repo create' uses --confirm flag (deprecated but supported in runner gh CLI version — Issue #235 7th-order fix)" 0
+else
+  run_tc "TC${tc_num}: 'gh repo create' does NOT use --confirm flag — runner would still RED with 'unknown flag'" 1
+fi
+
+# TC14 (NEW — 7th-order fix, Run #6 regression guard): `--yes` flag NOT used anywhere in workflow.
+#   Run #6 RCA showed --yes is unknown flag in runner's gh CLI version. Any future code that switches
+#   back to --yes would re-trigger Run #6 RED. This TC is a regression guard.
+tc_num=$((tc_num + 1))
+yes_flag_in_create=$(echo "$create_seed_block" | grep -cE -- "--yes" | tr -d ' ')
+if [[ "$yes_flag_in_create" -eq 0 ]]; then
+  run_tc "TC${tc_num}: --yes flag NOT used in 'gh repo create' (Run #6 regression guard — 'unknown flag: --yes' prevention)" 0
+else
+  run_tc "TC${tc_num}: --yes flag STILL PRESENT in 'gh repo create' (count=$yes_flag_in_create) — Run #6 root cause would still RED" 1
 fi
 
 echo ""
