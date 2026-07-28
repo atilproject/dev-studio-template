@@ -102,8 +102,12 @@ jobs:
           # auth instead of github-actions[bot] default credential.
           gh auth setup-git 2>&1 || echo "gh auth setup-git warning (continuing)"
           # Create the repo (API only — NO --push since it uses github-actions[bot]).
-          # --yes instead of deprecated --confirm (per gh CLI deprecation warning).
-          gh repo create "atilproject/${REPO_NAME}" --public --yes
+          # Option E' (per tester pushback cmt 5108593038 + orch ACK cmt 19:13:39Z):
+          # Runner's gh CLI version is too old to support interactive-prompt-suppression flags.
+          # Drop the suppression flag entirely — `gh repo create --public <name>` works without
+          # any confirmation flag (the API call to create a public repo does not prompt;
+          # --public is the only required flag on this runner).
+          gh repo create "atilproject/${REPO_NAME}" --public
           # Option D step (b): add the upstream remote with x-access-token URL.
           # The x-access-token URL embeds GH_TOKEN, so git push uses GH_TOKEN credential
           # regardless of git credential helper config (defense-in-depth — works even
@@ -182,7 +186,11 @@ jobs:
           echo "REPO_NAME=${REPO_NAME}" >> "$GITHUB_OUTPUT"
           # Rotate token post-creation (defense-in-depth).
           PRE_ROTATE_TOKEN="${GH_TOKEN}"
-          gh repo create "atilproject/${REPO_NAME}" --private --confirm
+          # Option E' (per tester pushback cmt 5108593038 + orch ACK cmt 19:13:39Z):
+          # Runner's gh CLI version is too old to support interactive-prompt-suppression flags.
+          # Drop the suppression flag entirely — `gh repo create --private <name>` works without
+          # any confirmation flag on this runner (the API call to create a private repo does not prompt).
+          gh repo create "atilproject/${REPO_NAME}" --private
           echo "Private repo URL: https://github.com/atilproject/${REPO_NAME}" >> "$GITHUB_STEP_SUMMARY"
 
       # 4. Teardown (AC1 destroy-on-completion).

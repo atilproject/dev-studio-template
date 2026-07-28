@@ -34,7 +34,7 @@
 #   - cycle ~#3968Q+847 inline d-test amender pattern — TC5+TC6 amend + TC7+TC8
 #     NEW in same commit before sign-off request (per ADR-0044 + cycle ~#3893Q v2)
 #
-# 12 TCs (≥6 baseline per ADR-0049 + ADR-0044):
+# 15 TCs (≥6 baseline per ADR-0049 + ADR-0044):
 #   TC1: workflow file exists at .github/workflows/disposable-bootstrap-test.yml
 #   TC2: YAML syntactic check (Python yaml.safe_load parses cleanly)
 #   TC3: 'Create + seed disposable public repo' step present (Issue #1254 fix — combined create+seed)
@@ -47,6 +47,9 @@
 #   TC10 (NEW — 6th-order fix, Option D explicit credential): `git remote add upstream https://x-access-token:` pattern present (x-access-token URL uses GH_TOKEN credential regardless of git credential helper)
 #   TC11 (NEW — 6th-order fix, Option D explicit push): explicit `git push upstream HEAD:main` present (not just --push flag)
 #   TC12 (NEW — 6th-order fix, Run #5 regression guard): `--push` flag REMOVED from `gh repo create` invocation (regression guard against Run #5 github-actions[bot] 403 root cause)
+#   TC13 (AMENDED 2x — 7th-order fix, Option E' per tester pushback): `--confirm` flag NOT used in `gh repo create` invocation (Run #7 30390499383 RED — runner's gh CLI doesn't support --confirm either; was: --confirm present; before that: --yes present)
+#   TC14 (AMENDED 2x — 7th-order fix, smart check): `--yes` flag NOT used in `gh repo create` COMMAND LINE (matches only the actual command, not comments — original TC14 was too broad and matched comment text)
+#   TC15 (NEW — 7th-order fix, Option E' guard): `gh repo create` invocation uses ONLY `--public` flag (no --yes, --confirm, --interactive, --prompt; no flag that would cause an interactive prompt in the runner's gh CLI)
 #
 # Pre-port RED state (verified 2026-07-28T16:05Z against PR #228 merged workflow):
 #   - TC1: PASS (file exists)
@@ -234,6 +237,43 @@ if [[ "$push_flag_in_create" -eq 0 ]]; then
   run_tc "TC${tc_num}: --push flag REMOVED from 'gh repo create' (Run #5 root cause guard — github-actions[bot] 403 prevention)" 0
 else
   run_tc "TC${tc_num}: --push flag STILL PRESENT in 'gh repo create' (count=$push_flag_in_create) — Run #5 root cause would still RED" 1
+fi
+
+# TC13 (AMENDED 2x — 7th-order fix, Option E' per tester pushback): `--confirm` flag NOT used in `gh repo create`.
+#   Per tester pushback cmt 5108593038 + orch ACK cmt 19:13:39Z: runner's gh CLI version is too old to support BOTH --yes AND --confirm.
+#   Drop both flags entirely. This TC is INVERTED from original (was: --confirm present; now: --confirm absent).
+tc_num=$((tc_num + 1))
+gh_repo_create_cmd=$(echo "$create_seed_block" | grep -E "^[[:space:]]*gh repo create" | tr -d ' ')
+confirm_flag_in_create=$(echo "$gh_repo_create_cmd" | grep -cE -- "--confirm" | tr -d ' ')
+if [[ "$confirm_flag_in_create" -eq 0 ]]; then
+  run_tc "TC${tc_num}: --confirm flag NOT used in 'gh repo create' command (Option E' — runner gh CLI doesn't support --confirm either)" 0
+else
+  run_tc "TC${tc_num}: --confirm flag STILL PRESENT in 'gh repo create' (count=$confirm_flag_in_create) — Option E' fix incomplete" 1
+fi
+
+# TC14 (AMENDED 2x — 7th-order fix, smart check): `--yes` flag NOT used in `gh repo create` COMMAND LINE only.
+#   Original TC14 was too broad — it matched comment text like "drop --yes". This version matches only the actual
+#   `gh repo create` command line, not comments. Per tester pushback cmt 5108593038.
+tc_num=$((tc_num + 1))
+gh_repo_create_cmd=$(echo "$create_seed_block" | grep -E "^[[:space:]]*gh repo create" | tr -d ' ')
+yes_flag_in_create=$(echo "$gh_repo_create_cmd" | grep -cE -- "--yes" | tr -d ' ')
+if [[ "$yes_flag_in_create" -eq 0 ]]; then
+  run_tc "TC${tc_num}: --yes flag NOT used in 'gh repo create' command line (Run #7 RCA — 'unknown flag: --yes' prevention)" 0
+else
+  run_tc "TC${tc_num}: --yes flag STILL PRESENT in 'gh repo create' command (count=$yes_flag_in_create) — Run #7 root cause would still RED" 1
+fi
+
+# TC15 (NEW — 7th-order fix, Option E' guard): `gh repo create` uses ONLY --public flag (no interactive-prompt flag).
+#   Per tester pushback cmt 5108593038: any flag that causes an interactive prompt would RED in the runner.
+#   This TC verifies the gh repo create invocation has ONLY --public + the repo name (no --yes, --confirm, --interactive, --prompt).
+tc_num=$((tc_num + 1))
+gh_repo_create_cmd=$(echo "$create_seed_block" | grep -E "^[[:space:]]*gh repo create" | tr -d ' ')
+# Strip the repo name and --public, then check no other flag is present
+gh_repo_create_extra_flags=$(echo "$gh_repo_create_cmd" | sed -E 's/^gh repo create//; s/"atilproject[^"]*"//; s/--public//' | grep -oE -- '--[a-zA-Z][a-zA-Z0-9-]*' | grep -vE "^--" || echo "")
+if [[ -z "$gh_repo_create_extra_flags" ]]; then
+  run_tc "TC${tc_num}: 'gh repo create' uses ONLY --public flag (no interactive-prompt flag like --yes/--confirm/--interactive/--prompt)" 0
+else
+  run_tc "TC${tc_num}: 'gh repo create' has extra flags: $gh_repo_create_extra_flags (runner would prompt)" 1
 fi
 
 echo ""
