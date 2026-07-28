@@ -69,28 +69,22 @@ jobs:
           ref: main
           fetch-depth: 0
 
-      # 2. Generate unique disposable repo name + ATOMIC create + seed via
-      # `gh repo create --push --source .` (Issue #1254 PR #229 — 3rd-order defect).
-      # + Issue #231 follow-up (5th-order defect — origin remote conflict).
-      # Run #4 (30384997111) RED at step 3 with "Unable to add remote 'origin'"
-      # because step 2 (actions/checkout) already added an 'origin' remote
-      # pointing to atilproject/dev-studio-template. `gh repo create --source .`
-      # tries to add a NEW remote with default name 'origin' → name collision →
-      # "Process completed with exit code 1". Repo IS created (URL in log) but
-      # push fails AND the leaked repo must be teardown-cleaned (which currently
-      # also fails — GH_TOKEN lacks `delete_repo` scope, see Issue #231 AC2).
+      # 2. Generate unique disposable repo name + create + seed.
       #
-      # Option C fix (per orch dual-channel wake 2026-07-28T20:56:05Z+0300):
-      #   (a) Remove the existing 'origin' remote before `gh repo create` runs
-      #       (defense-in-depth: ensures the local-repo remote namespace is
-      #       free for --source to assign its own default 'origin' which would
-      #       in turn conflict-free with our subsequent teardown-cleanup)
-      #   (b) Pass `--remote upstream` so `gh` uses a distinct remote name even
-      #       if step (a) is skipped (works in tandem — belt + suspenders).
+      # History of fixes (cluster #41 cascade — 5 layers deep, cycle ~#3968Q+1109 inverse outcome RECURSIVE):
+      #   - Issue #1254 (3rd-order, PR #229) — atomic `gh repo create --push --source .` to fix github-actions[bot] token-scope defect on the separate seed step.
+      #   - Issue #231 (5th-order, PR #232) — Option C belt+suspenders: `git remote remove origin` + `--remote upstream` flag to avoid origin-name collision with `actions/checkout`'s origin remote.
+      #   - Issue #1254 follow-up #2 (6th-order, this PR #233) — Run #5 (30386751399) RED at step 3 with "github-actions[bot] 403". Root cause: the `--push --source .` flag triggers an internal `git push` that uses github-actions[bot] default git credential (NOT GH_TOKEN env). ATILPROJECT_DISPOSABLE_TOKEN has cross-repo push scope; github-actions[bot] does NOT.
+      #
+      # Option D fix (per orch dual-channel wake 2026-07-28T21:19:12Z+0300):
+      #   (a) `gh auth setup-git` BEFORE create — configure git credential helper to use gh CLI's GH_TOKEN auth for any subsequent git operations (defense-in-depth for any other git operations in this step or future steps).
+      #   (b) DROP `--push --source .` from `gh repo create` (since --push uses wrong credential) — instead use `gh repo create` (API only) + explicit `git remote add upstream https://x-access-token:${GH_TOKEN}@...` + explicit `git push upstream HEAD:main`.
+      #   (c) The x-access-token URL pattern embeds GH_TOKEN in the URL itself, so git push uses GH_TOKEN credential regardless of git credential helper config (works without `gh auth setup-git` too — belt + suspenders).
+      #
       # cycle ~#3968Q+414 dev-prepared + owner-squash pattern; cluster #41
-      # S35-004 forward-port (PR #228 → PR #229 → Issue #231 5th-order fix).
+      # S35-004 forward-port (PR #228 → PR #229 → PR #232 → PR #233 6th-order fix).
       # id: create propagates REPO_NAME to downstream steps via steps.create.outputs.REPO_NAME.
-      - name: Create + seed disposable public repo (atomic gh repo create --push --remote upstream)
+      - name: Create + seed disposable public repo (explicit credential via x-access-token URL — drops --push)
         id: create
         env:
           GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
@@ -103,13 +97,24 @@ jobs:
           # step 2 (actions/checkout) created. This frees the name so subsequent
           # gh / git operations do not collide.
           git remote remove origin || true
-          # Atomic create + seed in one gh CLI invocation.
-          # --source .   points at GITHUB_WORKSPACE (dev-studio-template HEAD, checked out at step 1).
-          # --remote upstream  instructs gh to use 'upstream' as the new remote
-          #                    name (not 'origin') so even if step (a) failed
-          #                    silently the push can still succeed.
-          gh repo create "atilproject/${REPO_NAME}" --public --confirm \
-            --push --source . --remote upstream
+          # Defense-in-depth (Option D step a): configure git credential helper to use GH_TOKEN.
+          # This makes any subsequent git operations (push, fetch, etc.) use GH_TOKEN
+          # auth instead of github-actions[bot] default credential.
+          gh auth setup-git 2>&1 || echo "gh auth setup-git warning (continuing)"
+          # Create the repo (API only — NO --push since it uses github-actions[bot]).
+          # --yes instead of deprecated --confirm (per gh CLI deprecation warning).
+          gh repo create "atilproject/${REPO_NAME}" --public --yes
+          # Option D step (b): add the upstream remote with x-access-token URL.
+          # The x-access-token URL embeds GH_TOKEN, so git push uses GH_TOKEN credential
+          # regardless of git credential helper config (defense-in-depth — works even
+          # if `gh auth setup-git` silently failed).
+          git remote add upstream "https://x-access-token:${GH_TOKEN}@github.com/atilproject/${REPO_NAME}.git"
+          # Option D step (c): explicit push via x-access-token URL (uses GH_TOKEN credential).
+          # This replaces the `--push --source .` flag that triggered the github-actions[bot]
+          # default git credential on Run #5 (30386751399) RED at step 3.
+          git push upstream HEAD:main
+          # Cleanup the remote.
+          git remote remove upstream
 
       # 3. Clone + render + label (per AC1 init/render/labels capture).
       - name: Bootstrap init + render + labels (AC1 init/render/labels)

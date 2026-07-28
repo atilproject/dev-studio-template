@@ -34,17 +34,19 @@
 #   - cycle ~#3968Q+847 inline d-test amender pattern — TC5+TC6 amend + TC7+TC8
 #     NEW in same commit before sign-off request (per ADR-0044 + cycle ~#3893Q v2)
 #
-# 10 TCs (≥6 baseline per ADR-0049 + ADR-0044):
+# 12 TCs (≥6 baseline per ADR-0049 + ADR-0044):
 #   TC1: workflow file exists at .github/workflows/disposable-bootstrap-test.yml
 #   TC2: YAML syntactic check (Python yaml.safe_load parses cleanly)
-#   TC3: NEW atomic 'Create + seed disposable public repo' step present (Issue #1254 fix)
+#   TC3: 'Create + seed disposable public repo' step present (Issue #1254 fix — combined create+seed)
 #   TC4: Create+seed step INSERTED at step 2 (right after Checkout, before Bootstrap)
-#   TC5 (AMENDED): Create+seed step uses secrets.ATILPROJECT_DISPOSABLE_TOKEN (was: Seed step)
-#   TC6 (AMENDED): Create+seed step uses `--push --source .` atomic pattern (was: x-access-token URL)
-#   TC7 (NEW): `--push` flag present in create step (atomic create+seed signal)
-#   TC8 (NEW): old 'Seed new repo with dev-studio-template content' step is REMOVED (regression guard)
-#   TC9 (NEW — Issue #231 5th-order fix): `--remote upstream` flag present in gh repo create
-#   TC10 (NEW — Issue #231 defense-in-depth): `git remote remove origin` defense before gh repo create
+#   TC5 (AMENDED 2x): Create+seed step uses secrets.ATILPROJECT_DISPOSABLE_TOKEN env (preserved across all amends)
+#   TC6 (AMENDED 3x): Create+seed step uses explicit x-access-token URL push (was: --push --source atomic; before that: separate seed step)
+#   TC7 (AMENDED 2x): old 'Seed new repo with dev-studio-template content' step is REMOVED (regression guard for Issue #1254 fix; was: --push flag present)
+#   TC8 (AMENDED): `git remote remove origin` defense before gh repo create (was: --remote upstream flag; Option D drops --remote upstream since Option D does its own remote add)
+#   TC9 (NEW — 6th-order fix, Option D belt+suspenders): `gh auth setup-git` present (defense-in-depth for git credential helper)
+#   TC10 (NEW — 6th-order fix, Option D explicit credential): `git remote add upstream https://x-access-token:` pattern present (x-access-token URL uses GH_TOKEN credential regardless of git credential helper)
+#   TC11 (NEW — 6th-order fix, Option D explicit push): explicit `git push upstream HEAD:main` present (not just --push flag)
+#   TC12 (NEW — 6th-order fix, Run #5 regression guard): `--push` flag REMOVED from `gh repo create` invocation (regression guard against Run #5 github-actions[bot] 403 root cause)
 #
 # Pre-port RED state (verified 2026-07-28T16:05Z against PR #228 merged workflow):
 #   - TC1: PASS (file exists)
@@ -144,7 +146,7 @@ tc_num=$((tc_num + 1))
 # Extract the create+seed step block: from '- name: Create + seed' to the next '- name:' at same indent
 create_seed_block=$(awk '
   /- name: Create \+ seed disposable public repo/ { in_cs=1; print; next }
-  in_cs && /^      - name:/ { in_cs=0; print; next }
+  in_cs && /^      - name:/ { in_cs=0; next }
   in_cs { print }
 ' "$TARGET_FILE" 2>/dev/null)
 secrets_used=$(echo "$create_seed_block" | grep -cE "secrets\.ATILPROJECT_DISPOSABLE_TOKEN" | tr -d ' ')
@@ -155,78 +157,112 @@ else
   run_tc "TC${tc_num}: Create+seed step secrets check FAILED (secrets_used=$secrets_used, hardcoded=$hardcoded)" 1
 fi
 
-# TC6 (AMENDED): Create+seed step uses `--push --source .` atomic pattern (was: x-access-token URL)
+# TC6 (AMENDED 3x): Create+seed step uses explicit x-access-token URL push (was: --push --source atomic; before that: separate seed step).
+# Run #5 (30386751399) RED root cause: --push --source . flag uses github-actions[bot] default credential (NOT GH_TOKEN).
+# Fix: drop --push --source, use explicit `git remote add upstream x-access-token URL` + `git push upstream HEAD:main`.
 tc_num=$((tc_num + 1))
-push_flag=$(echo "$create_seed_block" | grep -cE -- "--push" | tr -d ' ')
-source_flag=$(echo "$create_seed_block" | grep -cE -- "--source" | tr -d ' ')
-x_access_token=$(echo "$create_seed_block" | grep -cE "x-access-token:" | tr -d ' ')
-if [[ "$push_flag" -ge 1 && "$source_flag" -ge 1 && "$x_access_token" -eq 0 ]]; then
-  run_tc "TC${tc_num}: Create+seed step uses --push + --source atomic pattern (no x-access-token URL) — push=$push_flag, source=$source_flag" 0
+x_access_token_url=$(echo "$create_seed_block" | grep -cE "x-access-token:.*github\.com" | tr -d ' ')
+git_push_explicit=$(echo "$create_seed_block" | grep -cE "git push upstream HEAD:main" | tr -d ' ')
+if [[ "$x_access_token_url" -ge 1 && "$git_push_explicit" -ge 1 ]]; then
+  run_tc "TC${tc_num}: Create+seed step uses explicit x-access-token URL + git push upstream HEAD:main (replaces --push --source, 6th-order Option D)" 0
 else
-  run_tc "TC${tc_num}: Create+seed step --push --source atomic check FAILED (push=$push_flag, source=$source_flag, x_access_token=$x_access_token)" 1
+  run_tc "TC${tc_num}: Create+seed step explicit push pattern FAILED (x_access_token_url=$x_access_token_url, git_push_explicit=$git_push_explicit)" 1
 fi
 
-# TC7 (NEW): `--push` flag present in create step
-tc_num=$((tc_num + 1))
-push_in_create=$(grep -A 10 "Create + seed disposable public repo" "$TARGET_FILE" 2>/dev/null | grep -cE -- "--push" | tr -d ' ')
-if [[ "$push_in_create" -ge 1 ]]; then
-  run_tc "TC${tc_num}: --push flag present in create step (atomic create+seed signal, Issue #1254 fix)" 0
-else
-  run_tc "TC${tc_num}: --push flag NOT found in create step — atomic signal missing" 1
-fi
-
-# TC8 (NEW): old 'Seed new repo with dev-studio-template content' step is REMOVED (regression guard)
+# TC7 (AMENDED 2x): old 'Seed new repo with dev-studio-template content' step is REMOVED (regression guard for Issue #1254 fix; was: --push flag present).
 tc_num=$((tc_num + 1))
 seed_step_present=$(grep -E "Seed new repo with dev-studio-template content" "$TARGET_FILE" 2>/dev/null | wc -l | tr -d ' ')
 if [[ "$seed_step_present" -eq 0 ]]; then
   run_tc "TC${tc_num}: old 'Seed new repo with dev-studio-template content' step REMOVED (regression guard holds, Issue #1254 fix applied)" 0
 else
-  run_tc "TC${tc_num}: old 'Seed new repo with dev-studio-template content' step STILL PRESENT (count=$seed_step_present) — should be removed by Option B refactor" 1
+  run_tc "TC${tc_num}: old 'Seed new repo with dev-studio-template content' step STILL PRESENT (count=$seed_step_present) — should be removed by Issue #1254 fix" 1
 fi
 
-# TC9 (NEW — Issue #231 5th-order fix, Run #4 30384997111 RED at step 3 origin remote conflict):
-#   --remote upstream flag is present in `gh repo create` invocation (avoids the
-#   name collision with the 'origin' remote that step 2 (actions/checkout) created).
+# TC8 (AMENDED): `git remote remove origin` defense before gh repo create (was: --remote upstream flag).
+# Issue #231 5th-order fix defense-in-depth. Option D retains this (still applicable).
 tc_num=$((tc_num + 1))
-remote_upstream_flag=$(grep -A 10 "Create + seed disposable public repo" "$TARGET_FILE" 2>/dev/null | grep -cE -- "--remote[[:space:]]+(upstream|[\"']upstream[\"'])" | tr -d ' ')
-if [[ "$remote_upstream_flag" -ge 1 ]]; then
-  run_tc "TC${tc_num}: --remote upstream flag present in 'Create + seed' step (avoids origin name collision — Issue #231 5th-order fix)" 0
-else
-  run_tc "TC${tc_num}: --remote upstream flag NOT found in 'Create + seed' step — Issue #231 fix missing (Run #4 30384997111 would still RED)" 1
-fi
-
-# TC10 (NEW — Issue #231 5th-order defense-in-depth):
-#   `git remote remove origin` defense step is present BEFORE the `gh repo create`
-#   invocation (belt + suspenders for the --remote upstream fix).
-tc_num=$((tc_num + 1))
-git_remote_remove_origin=$(grep -A 12 "Create + seed disposable public repo" "$TARGET_FILE" 2>/dev/null | grep -cE "git remote remove origin" | tr -d ' ')
+git_remote_remove_origin=$(echo "$create_seed_block" | grep -cE "git remote remove origin" | tr -d ' ')
 if [[ "$git_remote_remove_origin" -ge 1 ]]; then
-  run_tc "TC${tc_num}: 'git remote remove origin' defense present before gh repo create (Issue #231 defense-in-depth)" 0
+  run_tc "TC${tc_num}: 'git remote remove origin' defense present before gh repo create (Issue #231 defense-in-depth, retained by 6th-order Option D)" 0
 else
   run_tc "TC${tc_num}: 'git remote remove origin' defense MISSING — Issue #231 belt+suspenders missing" 1
+fi
+
+# TC9 (NEW — 6th-order fix, Option D belt+suspenders, Run #5 30386751399 RED at step 3 github-actions[bot] 403):
+#   `gh auth setup-git` defense-in-depth step is present BEFORE the `gh repo create` invocation.
+#   This configures git's credential helper to use gh CLI's GH_TOKEN auth for any subsequent
+#   git operations (defense-in-depth — works even if the x-access-token URL pattern fails).
+tc_num=$((tc_num + 1))
+gh_auth_setup_git=$(echo "$create_seed_block" | grep -cE "gh auth setup-git" | tr -d ' ')
+if [[ "$gh_auth_setup_git" -ge 1 ]]; then
+  run_tc "TC${tc_num}: 'gh auth setup-git' defense-in-depth present (configures git credential helper to use GH_TOKEN — Run #5 root cause)" 0
+else
+  run_tc "TC${tc_num}: 'gh auth setup-git' defense-in-depth MISSING — 6th-order Option D belt+suspenders missing" 1
+fi
+
+# TC10 (NEW — 6th-order fix, Option D explicit credential):
+#   `git remote add upstream https://x-access-token:${GH_TOKEN}@github.com/...` pattern present.
+#   The x-access-token URL embeds GH_TOKEN, so git push uses GH_TOKEN credential regardless of
+#   git credential helper config (works without `gh auth setup-git` too — belt + suspenders).
+#   (Note: this is the same x-access-token check as TC6, but verifies the REMOTE ADD step specifically)
+tc_num=$((tc_num + 1))
+git_remote_add_upstream_xat=$(echo "$create_seed_block" | grep -cE "git remote add upstream.*x-access-token:" | tr -d ' ')
+if [[ "$git_remote_add_upstream_xat" -ge 1 ]]; then
+  run_tc "TC${tc_num}: 'git remote add upstream https://x-access-token:...' pattern present (explicit credential — 6th-order Option D)" 0
+else
+  run_tc "TC${tc_num}: 'git remote add upstream x-access-token:' pattern MISSING — 6th-order Option D explicit credential missing" 1
+fi
+
+# TC11 (NEW — 6th-order fix, Option D explicit push):
+#   Explicit `git push upstream HEAD:main` is present (replaces the --push flag).
+#   This is the actual push step that uses GH_TOKEN credential via the x-access-token URL.
+tc_num=$((tc_num + 1))
+git_push_upstream_main=$(echo "$create_seed_block" | grep -cE "git push upstream HEAD:main" | tr -d ' ')
+if [[ "$git_push_upstream_main" -ge 1 ]]; then
+  run_tc "TC${tc_num}: explicit 'git push upstream HEAD:main' present (replaces --push flag, uses GH_TOKEN credential)" 0
+else
+  run_tc "TC${tc_num}: explicit 'git push upstream HEAD:main' MISSING — 6th-order Option D push step missing" 1
+fi
+
+# TC12 (NEW — 6th-order fix, Run #5 regression guard):
+#   `--push` flag is REMOVED from `gh repo create` invocation (regression guard against
+#   the Run #5 (30386751399) RED root cause — --push uses github-actions[bot] default credential).
+tc_num=$((tc_num + 1))
+gh_repo_create_line=$(echo "$create_seed_block" | grep -E "^[[:space:]]*gh repo create" | tr -d ' ')
+push_flag_in_create=$(echo "$gh_repo_create_line" | grep -cE -- "--push" | tr -d ' ')
+if [[ "$push_flag_in_create" -eq 0 ]]; then
+  run_tc "TC${tc_num}: --push flag REMOVED from 'gh repo create' (Run #5 root cause guard — github-actions[bot] 403 prevention)" 0
+else
+  run_tc "TC${tc_num}: --push flag STILL PRESENT in 'gh repo create' (count=$push_flag_in_create) — Run #5 root cause would still RED" 1
 fi
 
 echo ""
 total_tcs=$tc_num
 if [ "$failed" -eq 0 ]; then
-  echo "✅ All $total_tcs TCs GREEN — Sprint 35 S35-004 atomic create+seed Issue #1254 + Issue #231 5th-order fix verified"
+  echo "✅ All $total_tcs TCs GREEN — Sprint 35 S35-004 atomic create+seed Issue #1254 + Issue #231 5th-order + 6th-order fixes verified"
   echo "   Impl PR ready for dev-prepared + owner-squash per ADR-0031 + cycle ~#414 sister pattern"
   echo "   cycle ~#3968Q+1109 inverse outcome RECURSIVE: 5 layers deep on S35-004 (Run #1 → #2 → #3 → #4 → #5)"
+  echo "   6th-order layer (cycle ~#3968Q+1109 NEW LAYER): Run #5 RED at step 3 with github-actions[bot] 403"
   exit 0
 else
   echo "❌ $failed TC(s) failed of $total_tcs — RED-first contract per ADR-0044"
   echo ""
-  echo "Fix scope (Issue #1254 + Issue #231 Option C):"
+  echo "Fix scope (Issue #1254 + Issue #231 Option C + 6th-order Option D):"
   echo "  - Replace step 2 'Create disposable public repo' with atomic 'Create + seed disposable public repo'"
   echo "  - Use gh repo create --push --source . for atomic create+seed"
   echo "  - REMOVE old step 2.5 'Seed new repo with dev-studio-template content'"
   echo "  - env GH_TOKEN: \${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }} preserved"
   echo "  - ADD 'git remote remove origin || true' defense before gh repo create (Run #4 origin conflict)"
   echo "  - ADD '--remote upstream' flag to gh repo create (avoid origin name collision)"
+  echo "  - ADD 'gh auth setup-git' defense-in-depth for git credential helper (Run #5)"
+  echo "  - DROP '--push --source .' from gh repo create (Run #5 uses github-actions[bot])"
+  echo "  - ADD 'git remote add upstream https://x-access-token:${GH_TOKEN}@...' (uses GH_TOKEN credential)"
+  echo "  - ADD explicit 'git push upstream HEAD:main' (replaces --push flag)"
   echo ""
   echo "Sister-pattern: cycle ~#3968Q+414 dev-prepared + owner-squash workflow"
-  echo "Sister-pattern: cycle ~#3968Q+847 inline d-test amender (TC5+TC6 amend, TC7+TC8+TC9+TC10 NEW)"
+  echo "Sister-pattern: cycle ~#3968Q+847 inline d-test amender (TC5+TC6 amend, TC7+TC8+TC9+TC10 NEW, TC11+TC12+TC13+TC14 NEW)"
   echo "Sister-pattern: cycle ~#3968Q+1109 inverse outcome RECURSIVE 5 layers — Run #4 RED at step 3 (origin conflict) → Option C fix"
+  echo "Sister-pattern: cycle ~#3968Q+1109 NEW LAYER 6th-order — Run #5 RED at step 3 (github-actions[bot] 403) → Option D fix"
   echo "Sister-pattern: RETRO-035 LIVE VALIDATION: 'When RED → fix → re-trigger RED at **different step**, investigate next downstream step's data flow'"
   exit 1
 fi
