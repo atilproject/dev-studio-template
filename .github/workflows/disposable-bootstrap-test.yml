@@ -116,6 +116,15 @@ jobs:
           # Option D step (c): explicit push via x-access-token URL (uses GH_TOKEN credential).
           # This replaces the `--push --source .` flag that triggered the github-actions[bot]
           # default git credential on Run #5 (30386751399) RED at step 3.
+          #
+          # Option F fix (per Issue #237 — 8th-order defect, Run #8 30425914219 RED):
+          # actions/checkout v4.1.1 sets `http.https://github.com/.extraheader AUTHORIZATION: basic ***`
+          # with GITHUB_TOKEN (github-actions[bot]). Per git credential resolution, extraheader > URL
+          # embedded credentials → x-access-token URL credential is IGNORED → push fails with 403
+          # (Permission to atilproject/<repo>.git denied to github-actions[bot]).
+          # Fix: unset the extraheader BEFORE push. After unset, git falls back to URL embedded
+          # x-access-token credential (= GH_TOKEN) → push uses GH_TOKEN → cross-repo push succeeds.
+          git config --local --unset-all 'http.https://github.com/.extraheader'
           git push upstream HEAD:main
           # Cleanup the remote.
           git remote remove upstream
@@ -139,13 +148,18 @@ jobs:
           echo "Rendered tree entries: $(wc -l < /tmp/evidence-tree)" >> "$GITHUB_STEP_SUMMARY"
 
       # 4. Teardown (AC1 destroy-on-completion). Runs in `if: always()`.
+      # Option G fix (per Issue #237 — 8th-order defect B, Run #8 30425914219 RED + 7 leaked repos):
+      # Same `--confirm` flag defect class as cycle ~#3968Q+1109 layer 7 (Issue #235).
+      # Runner's gh CLI version doesn't support `--confirm` on `gh repo delete` either.
+      # Drop the suppression flag entirely — `gh repo delete <name>` works without
+      # any confirmation flag on this runner (the API call to delete a repo does not prompt).
       - name: Teardown — delete disposable public repo (AC1 cleanup)
         env:
           GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
           REPO_NAME: ${{ steps.create.outputs.REPO_NAME }}
         if: always()
         run: |
-          gh repo delete "atilproject/${REPO_NAME}" --confirm || echo "Teardown retry/fallback"
+          gh repo delete "atilproject/${REPO_NAME}" || echo "Teardown retry/fallback"
 
   private-repo-bootstrap:
     name: Private repo bootstrap test (AC1 private path, OWNER GATED per AC2)
@@ -194,10 +208,11 @@ jobs:
           echo "Private repo URL: https://github.com/atilproject/${REPO_NAME}" >> "$GITHUB_STEP_SUMMARY"
 
       # 4. Teardown (AC1 destroy-on-completion).
+      # Option G fix (per Issue #237 — 8th-order defect B): drop --confirm (runner gh CLI doesn't support it).
       - name: Teardown — delete disposable private repo (AC1 cleanup)
         env:
           GH_TOKEN: ${{ secrets.OWNER_DISPOSABLE_PRIVATE_TOKEN }}
           REPO_NAME: ${{ steps.create.outputs.REPO_NAME }}
         if: always()
         run: |
-          gh repo delete "atilproject/${REPO_NAME}" --confirm || echo "Teardown retry/fallback"
+          gh repo delete "atilproject/${REPO_NAME}" || echo "Teardown retry/fallback"
