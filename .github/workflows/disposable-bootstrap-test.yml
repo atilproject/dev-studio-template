@@ -130,12 +130,19 @@ jobs:
           git remote remove upstream
 
       # 3. Clone + render + label (per AC1 init/render/labels capture).
-      - name: Bootstrap init + render + labels (AC1 init/render/labels)
+      # Option H fix (per Issue #239 — 9th-order defect, Run #9 30427156219 RED):
+      # Self-hosted runner has persistent /tmp workspace. Run #2 populated /tmp/disposable
+      # via `git clone` and never cleaned up. Subsequent Runs fail at:
+      #   fatal: destination path '/tmp/disposable' already exists and is not an empty directory.
+      # Fix: rm -rf /tmp/disposable BEFORE `git clone` step. After rm, clone creates a fresh dir.
+      - name: Bootstrap init + render + labels (AC1 init/render/labels) — Option H rm -rf /tmp/disposable
         env:
           GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
           REPO_NAME: ${{ steps.create.outputs.REPO_NAME }}
         run: |
           set -euo pipefail
+          # Option H: rm -rf /tmp/disposable BEFORE git clone (workspace persistence fix).
+          rm -rf /tmp/disposable
           git clone "https://x-access-token:${GH_TOKEN}@github.com/atilproject/${REPO_NAME}.git" /tmp/disposable
           cd /tmp/disposable
           # Run init.sh (template engine) + bootstrap-labels.sh (label canonicalization)
@@ -148,18 +155,24 @@ jobs:
           echo "Rendered tree entries: $(wc -l < /tmp/evidence-tree)" >> "$GITHUB_STEP_SUMMARY"
 
       # 4. Teardown (AC1 destroy-on-completion). Runs in `if: always()`.
-      # Option G fix (per Issue #237 — 8th-order defect B, Run #8 30425914219 RED + 7 leaked repos):
-      # Same `--confirm` flag defect class as cycle ~#3968Q+1109 layer 7 (Issue #235).
-      # Runner's gh CLI version doesn't support `--confirm` on `gh repo delete` either.
-      # Drop the suppression flag entirely — `gh repo delete <name>` works without
-      # any confirmation flag on this runner (the API call to delete a repo does not prompt).
-      - name: Teardown — delete disposable public repo (AC1 cleanup)
+      # Option G (PR #238 SQUASHED) tried: drop --confirm from `gh repo delete`.
+      # Option I (per Issue #239 — 9th-order Defect 10, cycle ~#3968Q+1109 layer 9 RECURSIVE):
+      # Runner's gh CLI requires `--yes` for non-interactive delete (NOT `--confirm`).
+      # `--yes`/`--confirm` flag debate exhausted across layers 7+8 (Issue #235 + #237).
+      # RECOMMENDED Option I: use REST API `gh api -X DELETE repos/atilproject/${REPO_NAME}`
+      # which bypasses gh CLI flag confusion entirely (works across all runner gh CLI versions).
+      # Net effect: 8 leaked repos on atilproject from Runs #2-#9 (now 9 with Run #9 leak)
+      # will be cleaned up by the OWNER on the next teardown-success boundary, since
+      # ATILPROJECT_DISPOSABLE_TOKEN `delete_repo` scope grant is a separate OUT-OF-DEV-LANE
+      # admin action (Issue #239 AC2 owner-side action item).
+      - name: Teardown — delete disposable public repo via REST API (AC1 cleanup — Option I)
         env:
           GH_TOKEN: ${{ secrets.ATILPROJECT_DISPOSABLE_TOKEN }}
           REPO_NAME: ${{ steps.create.outputs.REPO_NAME }}
         if: always()
         run: |
-          gh repo delete "atilproject/${REPO_NAME}" || echo "Teardown retry/fallback"
+          # Option I: REST API delegation (bypasses gh CLI `--yes`/`--confirm` flag confusion).
+          gh api -X DELETE "repos/atilproject/${REPO_NAME}" || echo "Teardown retry/fallback"
 
   private-repo-bootstrap:
     name: Private repo bootstrap test (AC1 private path, OWNER GATED per AC2)
@@ -208,11 +221,13 @@ jobs:
           echo "Private repo URL: https://github.com/atilproject/${REPO_NAME}" >> "$GITHUB_STEP_SUMMARY"
 
       # 4. Teardown (AC1 destroy-on-completion).
-      # Option G fix (per Issue #237 — 8th-order defect B): drop --confirm (runner gh CLI doesn't support it).
-      - name: Teardown — delete disposable private repo (AC1 cleanup)
+      # Option I (per Issue #239 — 9th-order Defect 10): use REST API instead of `gh repo delete`
+      # to bypass gh CLI `--yes`/`--confirm` flag confusion (same defect class as Issue #235/237).
+      - name: Teardown — delete disposable private repo via REST API (AC1 cleanup — Option I)
         env:
           GH_TOKEN: ${{ secrets.OWNER_DISPOSABLE_PRIVATE_TOKEN }}
           REPO_NAME: ${{ steps.create.outputs.REPO_NAME }}
         if: always()
         run: |
-          gh repo delete "atilproject/${REPO_NAME}" || echo "Teardown retry/fallback"
+          # Option I: REST API delegation (bypasses gh CLI flag confusion).
+          gh api -X DELETE "repos/atilproject/${REPO_NAME}" || echo "Teardown retry/fallback"

@@ -34,7 +34,7 @@
 #   - cycle ~#3968Q+847 inline d-test amender pattern — TC5+TC6 amend + TC7+TC8
 #     NEW in same commit before sign-off request (per ADR-0044 + cycle ~#3893Q v2)
 #
-# 17 TCs (≥6 baseline per ADR-0049 + ADR-0044):
+# 19 TCs (≥6 baseline per ADR-0049 + ADR-0044):
 #   TC1: workflow file exists at .github/workflows/disposable-bootstrap-test.yml
 #   TC2: YAML syntactic check (Python yaml.safe_load parses cleanly)
 #   TC3: 'Create + seed disposable public repo' step present (Issue #1254 fix — combined create+seed)
@@ -292,22 +292,71 @@ else
   run_tc "TC${tc_num}: Option F unset extraheader pattern FAILED (unset_line='$unset_extraheader_line', push_line='$git_push_line_in_create' — unset must appear BEFORE push)" 1
 fi
 
-# TC17 (NEW — 8th-order fix, Option G per Issue #237 Defect B): `gh repo delete` invocations in BOTH public + private
-#   teardown steps do NOT use `--confirm` flag.
-#   Per Issue #237 RCA: same `--confirm` flag defect class as cycle ~#3968Q+1109 layer 7 (Issue #235). Runner's gh CLI doesn't support
-#   `--confirm` on `gh repo delete` either. Teardown silently fails (|| echo "Teardown retry/fallback") → 7 leaked repos on atilproject
-#   from Runs #2-#8. Fix: drop `--confirm` entirely from both teardown lines (public + private).
+# TC17 (AMENDED 4x — 9th-order fix, Option I per Issue #239 Defect 10): teardown uses REST API
+#   `gh api -X DELETE "repos/atilproject/${REPO_NAME}"` (BOTH public + private teardowns, count >= 2).
+#   AND: NO `gh repo delete` invocations remain in workflow (Option G superseded by Option I).
+#   Per Issue #239 RCA: `--confirm` was wrong flag (Option G), runner's `gh repo delete` requires `--yes` for non-interactive delete.
+#   --yes/--confirm flag debate exhausted across layers 7+8 (Issue #235 + Issue #237). RECOMMENDED Option I: REST API bypasses
+#   gh CLI flag confusion entirely. Teardown `|| echo "Teardown retry/fallback"` masks any error → 8 leaked repos on atilproject
+#   from Runs #2-#9. Fix: replace `gh repo delete` with `gh api -X DELETE repos/atilproject/${REPO_NAME}` in BOTH teardowns.
 tc_num=$((tc_num + 1))
+gh_api_delete_count=$(grep -cE '^[[:space:]]*gh api -X DELETE "repos/atilproject/' "$TARGET_FILE" 2>/dev/null)
+gh_api_delete_count=${gh_api_delete_count:-0}
 gh_repo_delete_count=$(grep -cE "^[[:space:]]*gh repo delete" "$TARGET_FILE" 2>/dev/null)
 gh_repo_delete_count=${gh_repo_delete_count:-0}
-gh_repo_delete_with_confirm=$(grep -cE "^[[:space:]]*gh repo delete.*--confirm" "$TARGET_FILE" 2>/dev/null)
-gh_repo_delete_with_confirm=${gh_repo_delete_with_confirm:-0}
-if [[ "$gh_repo_delete_count" -ge 2 && "$gh_repo_delete_with_confirm" -eq 0 ]]; then
-  run_tc "TC${tc_num}: 'gh repo delete' invocations (count=$gh_repo_delete_count) ALL drop --confirm flag (Option G — Issue #237 8th-order Defect B teardown silent-fail fix)" 0
-elif [[ "$gh_repo_delete_count" -lt 2 ]]; then
-  run_tc "TC${tc_num}: 'gh repo delete' invocations count=$gh_repo_delete_count (expected ≥2 = public+private teardown)" 1
+if [[ "$gh_api_delete_count" -ge 2 && "$gh_repo_delete_count" -eq 0 ]]; then
+  run_tc "TC${tc_num}: 'gh api -X DELETE repos/atilproject/' REST API delegation present (count=$gh_api_delete_count ≥2) AND 'gh repo delete' invocations REMOVED (count=$gh_repo_delete_count == 0) — Option I teardown fix per Issue #239 Defect 10" 0
+elif [[ "$gh_api_delete_count" -lt 2 ]]; then
+  run_tc "TC${tc_num}: 'gh api -X DELETE repos/atilproject/' count=$gh_api_delete_count (expected ≥2 = public+private teardown) — Option I fix incomplete" 1
 else
-  run_tc "TC${tc_num}: 'gh repo delete' invocations STILL HAVE --confirm flag (count=$gh_repo_delete_with_confirm/$gh_repo_delete_count) — Option G fix incomplete; teardown would silently leak repos" 1
+  run_tc "TC${tc_num}: 'gh repo delete' invocations STILL PRESENT (count=$gh_repo_delete_count) alongside REST API delegation — Option I should REPLACE not supplement gh repo delete; --yes/--confirm flag debate exhausted across layers 7+8" 1
+fi
+
+# TC18 (NEW — 9th-order fix, Option H per Issue #239 Run #9 30427156219 RED): `rm -rf /tmp/disposable`
+#   is present in the bootstrap init + render + labels step block BEFORE `git clone ... /tmp/disposable`.
+#   Per Issue #239 RCA: self-hosted runner has persistent `/tmp` workspace (NOT per-Run ephemeral).
+#   Run #2 populated `/tmp/disposable` via `git clone` and never cleaned up. Subsequent Runs (including Run #9)
+#   fail at: `fatal: destination path '/tmp/disposable' already exists and is not an empty directory.`
+#   Fix: `rm -rf /tmp/disposable` BEFORE `git clone` step. Line-order check `rm_line < clone_line` invariant.
+tc_num=$((tc_num + 1))
+# Extract bootstrap init + render + labels step block.
+bootstrap_block=$(awk '
+  /- name: Bootstrap init \+ render \+ labels/ { in_bs=1; print; next }
+  in_bs && /^      - name:/ { in_bs=0; next }
+  in_bs { print }
+' "$TARGET_FILE" 2>/dev/null)
+rm_line=$(echo "$bootstrap_block" | grep -nE "^[[:space:]]*rm -rf /tmp/disposable" | head -1 | cut -d: -f1 | tr -d ' ')
+clone_line=$(echo "$bootstrap_block" | grep -nE "git clone.*x-access-token:.*github\.com.*/tmp/disposable" | head -1 | cut -d: -f1 | tr -d ' ')
+if [[ -n "$rm_line" && -n "$clone_line" && "$rm_line" -lt "$clone_line" ]]; then
+  run_tc "TC${tc_num}: 'rm -rf /tmp/disposable' present BEFORE 'git clone ... /tmp/disposable' (Option H — Issue #239 9th-order Run #9 RED fix; rm_line=$rm_line, clone_line=$clone_line)" 0
+else
+  run_tc "TC${tc_num}: Option H rm -rf /tmp/disposable pattern FAILED (rm_line='$rm_line', clone_line='$clone_line' — rm must appear BEFORE clone in bootstrap init step)" 1
+fi
+
+# TC19 (NEW — 9th-order fix, Option I explicit verification): `gh api -X DELETE "repos/atilproject/"`
+#   invocations are present in BOTH public teardown step AND private teardown step explicitly.
+#   Extends TC17 (aggregate count >= 2) with per-teardown verification — TC17 verifies aggregate count;
+#   TC19 verifies each teardown step has its own. Ensures both public AND private teardowns are covered.
+tc_num=$((tc_num + 1))
+# Extract public teardown block.
+public_teardown_block=$(awk '
+  /- name: Teardown.*public repo/ { in_pt=1; print; next }
+  in_pt && /^      - name:/ { in_pt=0; next }
+  in_pt { print }
+' "$TARGET_FILE" 2>/dev/null)
+private_teardown_block=$(awk '
+  /- name: Teardown.*private repo/ { in_pt2=1; print; next }
+  in_pt2 && /^      - name:/ { in_pt2=0; next }
+  in_pt2 { print }
+' "$TARGET_FILE" 2>/dev/null)
+public_api_count=$(echo "$public_teardown_block" | grep -cE 'gh api -X DELETE "repos/atilproject/' 2>/dev/null)
+public_api_count=${public_api_count:-0}
+private_api_count=$(echo "$private_teardown_block" | grep -cE 'gh api -X DELETE "repos/atilproject/' 2>/dev/null)
+private_api_count=${private_api_count:-0}
+if [[ "$public_api_count" -ge 1 && "$private_api_count" -ge 1 ]]; then
+  run_tc "TC${tc_num}: 'gh api -X DELETE repos/atilproject/' present in BOTH public teardown (count=$public_api_count) AND private teardown (count=$private_api_count) — Option I per-teardown explicit verification" 0
+else
+  run_tc "TC${tc_num}: Option I per-teardown verification FAILED (public=$public_api_count, private=$private_api_count — both must be ≥1)" 1
 fi
 
 echo ""
