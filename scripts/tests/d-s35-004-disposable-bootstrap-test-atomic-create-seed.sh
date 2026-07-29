@@ -34,7 +34,7 @@
 #   - cycle ~#3968Q+847 inline d-test amender pattern — TC5+TC6 amend + TC7+TC8
 #     NEW in same commit before sign-off request (per ADR-0044 + cycle ~#3893Q v2)
 #
-# 15 TCs (≥6 baseline per ADR-0049 + ADR-0044):
+# 17 TCs (≥6 baseline per ADR-0049 + ADR-0044):
 #   TC1: workflow file exists at .github/workflows/disposable-bootstrap-test.yml
 #   TC2: YAML syntactic check (Python yaml.safe_load parses cleanly)
 #   TC3: 'Create + seed disposable public repo' step present (Issue #1254 fix — combined create+seed)
@@ -276,18 +276,54 @@ else
   run_tc "TC${tc_num}: 'gh repo create' has extra flags: $gh_repo_create_extra_flags (runner would prompt)" 1
 fi
 
+# TC16 (NEW — 8th-order fix, Option F per Issue #237 Run #8 30425914219 RED): `git config --local --unset-all 'http.https://github.com/.extraheader'`
+#   is present in the create+seed step BEFORE `git push upstream HEAD:main`.
+#   Per Issue #237 RCA: actions/checkout v4.1.1 sets `http.https://github.com/.extraheader AUTHORIZATION: basic ***` with GITHUB_TOKEN
+#   (github-actions[bot]). Per git credential resolution, extraheader > URL embedded credentials → x-access-token URL credential is IGNORED
+#   → push to atilproject fails with 403 (Permission to atilproject/<repo>.git denied to github-actions[bot]).
+#   Fix: unset the extraheader BEFORE push. After unset, git falls back to URL embedded x-access-token credential (= GH_TOKEN) → push uses GH_TOKEN.
+#   This TC verifies BOTH (a) the unset command is present, AND (b) it appears BEFORE the push in step order.
+tc_num=$((tc_num + 1))
+unset_extraheader_line=$(echo "$create_seed_block" | grep -nE "git config --local --unset-all 'http\.https://github\.com/\.extraheader'" | head -1 | cut -d: -f1 | tr -d ' ')
+git_push_line_in_create=$(echo "$create_seed_block" | grep -nE "git push upstream HEAD:main" | head -1 | cut -d: -f1 | tr -d ' ')
+if [[ -n "$unset_extraheader_line" && -n "$git_push_line_in_create" && "$unset_extraheader_line" -lt "$git_push_line_in_create" ]]; then
+  run_tc "TC${tc_num}: 'git config --local --unset-all extraheader' present BEFORE 'git push upstream HEAD:main' (Option F — Issue #237 8th-order Run #8 RED fix; unset_line=$unset_extraheader_line, push_line=$git_push_line_in_create)" 0
+else
+  run_tc "TC${tc_num}: Option F unset extraheader pattern FAILED (unset_line='$unset_extraheader_line', push_line='$git_push_line_in_create' — unset must appear BEFORE push)" 1
+fi
+
+# TC17 (NEW — 8th-order fix, Option G per Issue #237 Defect B): `gh repo delete` invocations in BOTH public + private
+#   teardown steps do NOT use `--confirm` flag.
+#   Per Issue #237 RCA: same `--confirm` flag defect class as cycle ~#3968Q+1109 layer 7 (Issue #235). Runner's gh CLI doesn't support
+#   `--confirm` on `gh repo delete` either. Teardown silently fails (|| echo "Teardown retry/fallback") → 7 leaked repos on atilproject
+#   from Runs #2-#8. Fix: drop `--confirm` entirely from both teardown lines (public + private).
+tc_num=$((tc_num + 1))
+gh_repo_delete_count=$(grep -cE "^[[:space:]]*gh repo delete" "$TARGET_FILE" 2>/dev/null)
+gh_repo_delete_count=${gh_repo_delete_count:-0}
+gh_repo_delete_with_confirm=$(grep -cE "^[[:space:]]*gh repo delete.*--confirm" "$TARGET_FILE" 2>/dev/null)
+gh_repo_delete_with_confirm=${gh_repo_delete_with_confirm:-0}
+if [[ "$gh_repo_delete_count" -ge 2 && "$gh_repo_delete_with_confirm" -eq 0 ]]; then
+  run_tc "TC${tc_num}: 'gh repo delete' invocations (count=$gh_repo_delete_count) ALL drop --confirm flag (Option G — Issue #237 8th-order Defect B teardown silent-fail fix)" 0
+elif [[ "$gh_repo_delete_count" -lt 2 ]]; then
+  run_tc "TC${tc_num}: 'gh repo delete' invocations count=$gh_repo_delete_count (expected ≥2 = public+private teardown)" 1
+else
+  run_tc "TC${tc_num}: 'gh repo delete' invocations STILL HAVE --confirm flag (count=$gh_repo_delete_with_confirm/$gh_repo_delete_count) — Option G fix incomplete; teardown would silently leak repos" 1
+fi
+
 echo ""
 total_tcs=$tc_num
 if [ "$failed" -eq 0 ]; then
-  echo "✅ All $total_tcs TCs GREEN — Sprint 35 S35-004 atomic create+seed Issue #1254 + Issue #231 5th-order + 6th-order fixes verified"
+  echo "✅ All $total_tcs TCs GREEN — Sprint 35 S35-004 atomic create+seed Issue #1254 + Issue #231 5th-order + 6th-order + 7th-order + 8th-order fixes verified"
   echo "   Impl PR ready for dev-prepared + owner-squash per ADR-0031 + cycle ~#414 sister pattern"
-  echo "   cycle ~#3968Q+1109 inverse outcome RECURSIVE: 5 layers deep on S35-004 (Run #1 → #2 → #3 → #4 → #5)"
+  echo "   cycle ~#3968Q+1109 inverse outcome RECURSIVE: 8 layers deep on S35-004 (Run #1 → #2 → #3 → #4 → #5 → #6 → #7 → #8)"
   echo "   6th-order layer (cycle ~#3968Q+1109 NEW LAYER): Run #5 RED at step 3 with github-actions[bot] 403"
+  echo "   7th-order layer: Run #7 RED at step 3 with unknown flag --yes (TC13+TC14+TC15 Option E' fix)"
+  echo "   8th-order layer (cycle ~#3968Q+1109 RECURSIVE): Run #8 RED at step 3 with extraheader override + teardown silent-fail (TC16 Option F + TC17 Option G fix)"
   exit 0
 else
   echo "❌ $failed TC(s) failed of $total_tcs — RED-first contract per ADR-0044"
   echo ""
-  echo "Fix scope (Issue #1254 + Issue #231 Option C + 6th-order Option D):"
+  echo "Fix scope (Issue #1254 + Issue #231 Option C + 6th-order Option D + 7th-order Option E' + 8th-order Option F+G):"
   echo "  - Replace step 2 'Create disposable public repo' with atomic 'Create + seed disposable public repo'"
   echo "  - Use gh repo create --push --source . for atomic create+seed"
   echo "  - REMOVE old step 2.5 'Seed new repo with dev-studio-template content'"
@@ -298,11 +334,16 @@ else
   echo "  - DROP '--push --source .' from gh repo create (Run #5 uses github-actions[bot])"
   echo "  - ADD 'git remote add upstream https://x-access-token:${GH_TOKEN}@...' (uses GH_TOKEN credential)"
   echo "  - ADD explicit 'git push upstream HEAD:main' (replaces --push flag)"
+  echo "  - DROP 'gh repo create --yes/--confirm' (Run #7 unknown flag, runner gh CLI too old)"
+  echo "  - ADD 'git config --local --unset-all http.https://github.com/.extraheader' BEFORE push (Run #8 extraheader override)"
+  echo "  - DROP 'gh repo delete --confirm' (Run #8 teardown silent-fail, same defect class as layer 7)"
   echo ""
   echo "Sister-pattern: cycle ~#3968Q+414 dev-prepared + owner-squash workflow"
   echo "Sister-pattern: cycle ~#3968Q+847 inline d-test amender (TC5+TC6 amend, TC7+TC8+TC9+TC10 NEW, TC11+TC12+TC13+TC14 NEW)"
   echo "Sister-pattern: cycle ~#3968Q+1109 inverse outcome RECURSIVE 5 layers — Run #4 RED at step 3 (origin conflict) → Option C fix"
   echo "Sister-pattern: cycle ~#3968Q+1109 NEW LAYER 6th-order — Run #5 RED at step 3 (github-actions[bot] 403) → Option D fix"
+  echo "Sister-pattern: cycle ~#3968Q+1109 NEW LAYER 7th-order — Run #7 RED at step 3 (unknown flag --yes/--confirm) → Option E' fix"
+  echo "Sister-pattern: cycle ~#3968Q+1109 RECURSIVE 8th-order — Run #8 RED at step 3 (extraheader override + teardown silent-fail) → Option F+G fix"
   echo "Sister-pattern: RETRO-035 LIVE VALIDATION: 'When RED → fix → re-trigger RED at **different step**, investigate next downstream step's data flow'"
   exit 1
 fi
